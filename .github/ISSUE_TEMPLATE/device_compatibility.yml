@@ -1,0 +1,11 @@
+name: Device compatibility
+description: Share read-only compatibility evidence
+body:
+  - type: input
+    attributes: {label: Model and ROM suffix, placeholder: Xiaomi 15 Ultra / MIXM}
+    validations: {required: true}
+  - type: textarea
+    attributes: {label: Read-only capability report, description: Review and redact before posting. Never post serial or Android ID.}
+    validations: {required: true}
+  - type: checkboxes
+    attributes: {label: Safety confirmation, options: [{label: I did not run an Experimental write., required: true}]}

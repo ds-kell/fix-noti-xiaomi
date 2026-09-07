@@ -1,0 +1,11 @@
+name: Bug report
+description: Report a reproducible application defect
+body:
+  - type: textarea
+    attributes: {label: What happened, description: Do not include accounts, tokens, notification content, serial or Android ID.}
+    validations: {required: true}
+  - type: textarea
+    attributes: {label: Reproduction steps}
+    validations: {required: true}
+  - type: textarea
+    attributes: {label: Redacted diagnostic report}
