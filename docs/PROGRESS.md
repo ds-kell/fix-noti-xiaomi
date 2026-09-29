@@ -9,6 +9,8 @@
 ## v0.2.0
 
 - Expanded the safe optimization profile to include `RUN_IN_BACKGROUND`, App Standby bucket and inactive state in addition to Doze and `RUN_ANY_IN_BACKGROUND`.
+- Added opt-in Xiaomi autostart AppOps (10053/10008), background-data netpolicy, aggressive background AppOps and a device-wide power profile. Every new write uses the existing snapshot, read-back verification and exact rollback transaction.
+- Refined the dashboard metrics, operation labels and Advanced Settings hierarchy so risky options are visually separated, explained and reset when Advanced mode is disabled.
 - Automatically includes installed Google Play Services and Google Services Framework packages whenever selected apps are diagnosed.
 - Added a visible diagnostic scope summary and localized operation/value explanations so results show what is being changed and why.
 - Kept unverified heartbeat global-setting hacks out of the default profile.

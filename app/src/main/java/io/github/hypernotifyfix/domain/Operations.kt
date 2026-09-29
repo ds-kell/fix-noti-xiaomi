@@ -107,8 +107,8 @@ class DozeWhitelistOperation : ReversibleOperation {
     }
 }
 
-class AppOpsOperation(private val op: String = "RUN_ANY_IN_BACKGROUND") : ReversibleOperation {
-    override val id = "appops_${op.lowercase()}"; override val riskLevel = RiskLevel.MEDIUM
+class AppOpsOperation(private val op: String = "RUN_ANY_IN_BACKGROUND", override val riskLevel: RiskLevel = RiskLevel.MEDIUM) : ReversibleOperation {
+    override val id = "appops_${op.lowercase()}"
     private val modes = setOf("allow", "ignore", "deny", "default", "foreground")
     private fun get(pkg: String) = PrivilegedCommand("$id.read", listOf("cmd", "appops", "get", pkg, op))
     override suspend fun probe(context: OperationContext, packageName: String): CapabilityStatus = when (read(context, packageName).value) { is SnapshotValue.Present -> CapabilityStatus.Supported; is SnapshotValue.Unsupported -> CapabilityStatus.Unsupported("AppOp unavailable"); else -> CapabilityStatus.Unknown("Cannot parse AppOps output") }
@@ -215,6 +215,98 @@ class InactiveOperation : ReversibleOperation {
     }
 }
 
+class NetworkPolicyWhitelistOperation : ReversibleOperation {
+    override val id = "network_background_whitelist"
+    override val riskLevel = RiskLevel.MEDIUM
+
+    private suspend fun uid(context: OperationContext, packageName: String): String? {
+        val result = context.executor.execute(PrivilegedCommand("$id.uid", listOf("cmd", "package", "list", "packages", "-U", packageName)))
+        return if (result.successful) Regex("\\buid:(\\d+)\\b").find(result.stdout)?.groupValues?.get(1) else null
+    }
+
+    private suspend fun listed(context: OperationContext, packageName: String): Boolean? {
+        val appUid = uid(context, packageName) ?: return null
+        val result = context.executor.execute(PrivilegedCommand("$id.read", listOf("cmd", "netpolicy", "list", "restrict-background-whitelist")))
+        if (!result.successful) return null
+        return Regex("\\b${Regex.escape(appUid)}\\b").containsMatchIn(result.stdout)
+    }
+
+    override suspend fun probe(context: OperationContext, packageName: String) =
+        if (!context.packages.isInstalled(packageName)) CapabilityStatus.Unsupported("Package not installed")
+        else if (listed(context, packageName) != null) CapabilityStatus.Supported else CapabilityStatus.Unsupported("Network policy whitelist unavailable")
+
+    override suspend fun read(context: OperationContext, packageName: String): OperationSnapshot {
+        if (!context.packages.isInstalled(packageName)) return OperationSnapshot(id, packageName, SnapshotValue.Unsupported("Package not installed"))
+        val value = listed(context, packageName) ?: return OperationSnapshot(id, packageName, SnapshotValue.Unreadable("Không đọc được whitelist dữ liệu nền"))
+        return OperationSnapshot(id, packageName, SnapshotValue.Present(value.toString()))
+    }
+
+    override fun plan(current: OperationSnapshot, desired: String) = OperationPlan(id, current.packageName, current, desired, riskLevel)
+
+    private suspend fun write(context: OperationContext, packageName: String, enabled: Boolean): Boolean {
+        val appUid = uid(context, packageName) ?: return false
+        val action = if (enabled) "add" else "remove"
+        return context.executor.execute(PrivilegedCommand("$id.$action", listOf("cmd", "netpolicy", action, "restrict-background-whitelist", appUid))).successful
+    }
+
+    override suspend fun apply(context: OperationContext, plan: OperationPlan): OperationResult {
+        val desired = plan.desired.toBooleanStrictOrNull()
+            ?: return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, "Trạng thái đích không hợp lệ")
+        if (plan.before.value !is SnapshotValue.Present || !write(context, plan.packageName, desired)) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, "Không thể đổi whitelist dữ liệu nền")
+        val verified = verify(context, plan)
+        return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) "Đã xác minh dữ liệu nền" else "UID hoặc trạng thái đọc lại không khớp", verified)
+    }
+
+    override suspend fun verify(context: OperationContext, plan: OperationPlan) = listed(context, plan.packageName)?.toString() == plan.desired
+
+    override suspend fun rollback(context: OperationContext, snapshot: OperationSnapshot): OperationResult {
+        val original = (snapshot.value as? SnapshotValue.Present)?.raw?.toBooleanStrictOrNull()
+            ?: return OperationResult(id, ResultStatus.ROLLBACK_FAILED, "Không đọc được trạng thái dữ liệu nền ban đầu")
+        val restored = write(context, snapshot.packageName, original) && listed(context, snapshot.packageName) == original
+        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) "Đã khôi phục whitelist dữ liệu nền" else "Khôi phục whitelist dữ liệu nền thất bại", restored)
+    }
+}
+
+class GlobalSettingOperation(
+    override val id: String,
+    private val key: String,
+    private val target: String,
+) : ReversibleOperation {
+    override val riskLevel = RiskLevel.EXPERIMENTAL
+    private val deviceTarget = "__device__"
+    private fun get() = PrivilegedCommand("$id.read", listOf("settings", "get", "global", key))
+
+    override suspend fun probe(context: OperationContext, packageName: String) =
+        if (context.executor.execute(get()).successful) CapabilityStatus.Supported else CapabilityStatus.Unsupported("Global setting unavailable")
+
+    override suspend fun read(context: OperationContext, packageName: String): OperationSnapshot {
+        val result = context.executor.execute(get())
+        return OperationSnapshot(id, deviceTarget, if (result.successful) SnapshotValue.Present(result.stdout.trim()) else SnapshotValue.Unreadable(result.stderr.ifBlank { "Không đọc được $key" }))
+    }
+
+    override fun plan(current: OperationSnapshot, desired: String) = OperationPlan(id, deviceTarget, current, desired, riskLevel)
+
+    override suspend fun apply(context: OperationContext, plan: OperationPlan): OperationResult {
+        if (plan.before.value !is SnapshotValue.Present || plan.desired != target) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, "Không có bản sao lưu global hợp lệ")
+        val result = context.executor.execute(PrivilegedCommand("$id.set", listOf("settings", "put", "global", key, target)))
+        if (!result.successful) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, result.stderr.ifBlank { "Không thể thay đổi $key" })
+        val verified = verify(context, plan)
+        return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) "Đã xác minh thiết lập toàn hệ thống" else "Trạng thái global đọc lại không khớp", verified)
+    }
+
+    override suspend fun verify(context: OperationContext, plan: OperationPlan) = (read(context, deviceTarget).value as? SnapshotValue.Present)?.raw == target
+
+    override suspend fun rollback(context: OperationContext, snapshot: OperationSnapshot): OperationResult {
+        val original = (snapshot.value as? SnapshotValue.Present)?.raw
+            ?: return OperationResult(id, ResultStatus.ROLLBACK_FAILED, "Không có giá trị global ban đầu")
+        val args = if (original == "null" || original.isBlank()) listOf("settings", "delete", "global", key) else listOf("settings", "put", "global", key, original)
+        val result = context.executor.execute(PrivilegedCommand("$id.restore", args))
+        val now = (read(context, deviceTarget).value as? SnapshotValue.Present)?.raw
+        val restored = result.successful && if (original == "null" || original.isBlank()) now == "null" else now == original
+        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) "Đã khôi phục thiết lập toàn hệ thống" else "Khôi phục $key thất bại", restored)
+    }
+}
+
 object DozeParser {
     private val packagePattern = Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+")
     fun parse(output: String): Set<String> = output.lineSequence().mapNotNull { raw ->
@@ -226,7 +318,13 @@ object DozeParser {
         }
     }.toSet()
 }
-object AppOpsParser { fun parse(output: String, op: String): String? { val match = Regex("(?im)^\\s*${Regex.escape(op)}(?:\\s*\\([^)]*\\))?\\s*:\\s*(allow|ignore|deny|default|foreground)\\b").find(output); return match?.groupValues?.get(1)?.lowercase() } }
+object AppOpsParser {
+    fun parse(output: String, op: String): String? {
+        val label = if (op.all(Char::isDigit)) "(?:MIUIOP\\()?${Regex.escape(op)}\\)?" else Regex.escape(op)
+        return Regex("(?im)^\\s*$label(?:\\s*\\([^)]*\\))?\\s*:\\s*(allow|ignore|deny|default|foreground)\\b")
+            .find(output)?.groupValues?.get(1)?.lowercase()
+    }
+}
 object StandbyBucketParser {
     fun parse(output: String): String? = Regex("(?m)(?:^|:)\\s*(5|10|20|30|40|45|50)\\s*$").find(output.trim())?.groupValues?.get(1)
     fun isOptimal(value: String): Boolean = value == "5" || value == "10"

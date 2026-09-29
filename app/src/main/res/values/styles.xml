@@ -1,4 +1,4 @@
 <resources>
-    <color name="launcher_background">#211069</color>
+    <color name="launcher_background">#FFFFFF</color>
     <style name="Theme.HyperNotifyFix" parent="android:style/Theme.Material.Light.NoActionBar"><item name="android:fontFamily">sans</item><item name="android:windowLightStatusBar">true</item></style>
 </resources>

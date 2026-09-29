@@ -20,6 +20,10 @@ data class UiState(
     val dryRun: Boolean = true,
     val advanced: Boolean = false,
     val experimental: Boolean = false,
+    val xiaomiAutostartOps: Boolean = false,
+    val networkWhitelist: Boolean = false,
+    val aggressiveAppOps: Boolean = false,
+    val aggressiveSystemProfile: Boolean = false,
     val shizuku: String = "Đang kiểm tra…",
     val uid: Int? = null,
     val device: DeviceInfo? = null,
@@ -69,8 +73,12 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         it.copy(selected = selected, maintenancePackages = (selected + support).size, diagnosticScope = emptySet(), plans = emptyList(), results = emptyList(), diagnosticCompleted = false)
     }
     fun setDryRun(value: Boolean) = mutable.update { it.copy(dryRun = value) }
-    fun setAdvanced(value: Boolean) = mutable.update { it.copy(advanced = value, experimental = if (value) it.experimental else false) }
+    fun setAdvanced(value: Boolean) = mutable.update { it.copy(advanced = value, experimental = if (value) it.experimental else false, xiaomiAutostartOps = if (value) it.xiaomiAutostartOps else false, networkWhitelist = if (value) it.networkWhitelist else false, aggressiveAppOps = if (value) it.aggressiveAppOps else false, aggressiveSystemProfile = if (value) it.aggressiveSystemProfile else false) }
     fun setExperimental(value: Boolean) = mutable.update { it.copy(experimental = value && it.advanced) }
+    fun setXiaomiAutostartOps(value: Boolean) = mutable.update { it.copy(xiaomiAutostartOps = value && it.advanced) }
+    fun setNetworkWhitelist(value: Boolean) = mutable.update { it.copy(networkWhitelist = value && it.advanced) }
+    fun setAggressiveAppOps(value: Boolean) = mutable.update { it.copy(aggressiveAppOps = value && it.advanced) }
+    fun setAggressiveSystemProfile(value: Boolean) = mutable.update { it.copy(aggressiveSystemProfile = value && it.advanced) }
     fun clearMessage() = mutable.update { it.copy(message = null) }
     fun diagnose() = viewModelScope.launch {
         if (!container.executor.isAvailable() || state.value.uid != 2000) { mutable.update { it.copy(message = "Cần Shizuku với quyền shell UID 2000") }; return@launch }
@@ -79,7 +87,14 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         val supportPackages = setOf("com.google.android.gms", "com.google.android.gsf").filter(container.catalog::isInstalled)
         val scope = state.value.selected + supportPackages
         container.maintenance.setPackages(scope)
-        scope.forEach { pkg -> container.operations.values.forEach { op ->
+        val optionalIds = buildSet {
+            if (state.value.xiaomiAutostartOps) addAll(setOf("appops_10053", "appops_10008"))
+            if (state.value.networkWhitelist) add("network_background_whitelist")
+            if (state.value.aggressiveAppOps) addAll(setOf("appops_wake_lock", "appops_start_foreground", "appops_schedule_exact_alarm"))
+        }
+        val safeIds = setOf("xiaomi_millet_no_restrict", "xiaomi_millet_white", "xiaomi_cloud_lowlatency", "doze_whitelist", "appops_run_any_in_background", "appops_run_in_background", "standby_bucket", "inactive_state")
+        val selectedOperations = container.packageOperations.filter { it.id in safeIds || it.id in optionalIds }
+        scope.forEach { pkg -> selectedOperations.forEach { op ->
             if (op.probe(container.operationContext, pkg) is CapabilityStatus.Supported) {
                 val snapshot = op.read(container.operationContext, pkg)
                 if (snapshot.value is SnapshotValue.Present) {
@@ -88,6 +103,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
                         "doze_whitelist" -> "true"
                         "standby_bucket" -> "10"
                         "inactive_state" -> "false"
+                        "network_background_whitelist" -> "true"
                         else -> "allow"
                     }
                     val alreadyOptimal = when (op.id) {
@@ -100,6 +116,20 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
                 }
             }
         } }
+        if (state.value.aggressiveSystemProfile) container.systemOperations.forEach { op ->
+            if (op.probe(container.operationContext, "__device__") is CapabilityStatus.Supported) {
+                val snapshot = op.read(container.operationContext, "__device__")
+                if (snapshot.value is SnapshotValue.Present) {
+                    val desired = when (op.id) {
+                        "global_cached_apps_freezer_off" -> "disabled"
+                        "global_mobile_data_always_on" -> "1"
+                        "global_wifi_never_sleep" -> "2"
+                        else -> "0"
+                    }
+                    if (snapshot.value.raw != desired) plans += op.plan(snapshot, desired)
+                }
+            }
+        }
         mutable.update { it.copy(diagnosticScope = scope, plans = plans, diagnosticCompleted = true, operationInProgress = false, message = if (plans.isEmpty()) "Đã kiểm tra cả ứng dụng và dịch vụ Google: chưa thấy giới hạn hệ thống có thể sửa an toàn." else "Đã tìm thấy ${plans.size} giới hạn trong ${scope.size} package. Chưa có thay đổi nào được áp dụng.") }
     }
     fun applyConfirmed() = viewModelScope.launch {

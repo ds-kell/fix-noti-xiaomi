@@ -27,6 +27,7 @@ class OperationsTest {
     @Test fun timeoutIsRepresented() { assertFalse(CommandResult("x", 124, "", "", 100, true).successful) }
     @Test fun parsesDozeFormats() { assertEquals(setOf("com.a.app", "com.b.app", "com.c.app"), DozeParser.parse("system,com.a.app,10001\nuser,com.b.app,10234\ncom.c.app\nsystem-excidle,com.not.full,1000\n")) }
     @Test fun parsesAppOpsFormats() { assertEquals("ignore", AppOpsParser.parse("RUN_ANY_IN_BACKGROUND: ignore; time=+1h", "RUN_ANY_IN_BACKGROUND")); assertEquals("foreground", AppOpsParser.parse("  RUN_ANY_IN_BACKGROUND (default): foreground", "RUN_ANY_IN_BACKGROUND")) }
+    @Test fun parsesXiaomiNumericAppOps() { assertEquals("allow", AppOpsParser.parse("MIUIOP(10053): allow; time=+1h", "10053")); assertEquals("ignore", AppOpsParser.parse("10008: ignore", "10008")) }
     @Test fun whitelistMergePreservesAndDeduplicates() { assertEquals("com.a.app; com.b.app;com.c.app  ", XiaomiWhitelist.merge("com.a.app; com.b.app  ", "com.c.app")); assertEquals("com.a.app,com.b.app", XiaomiWhitelist.merge("com.a.app,com.b.app", "com.b.app")) }
     @Test fun whitelistMergePreservesXiaomiTrailingDelimiter() { assertEquals("com.a.app;com.b.app;", XiaomiWhitelist.merge("com.a.app;", "com.b.app")); assertEquals("com.a.app:com.b.app:com.c.app", XiaomiWhitelist.merge("com.a.app:com.b.app", "com.c.app")) }
     @Test fun whitelistRejectsAmbiguousFormat() { assertNull(XiaomiWhitelist.merge("com.a.app,com.b.app;com.c.app", "com.d.app")); assertNull(XiaomiWhitelist.merge("unknown token", "com.d.app")) }
@@ -59,6 +60,23 @@ class OperationsTest {
         assertTrue(snapshot.value is SnapshotValue.Unreadable)
     }
     @Test fun snapshotDistinguishesAbsentEmptyUnreadable() { assertNotEquals(SnapshotValue.Absent, SnapshotValue.Present("")); assertNotEquals(SnapshotValue.Absent, SnapshotValue.Unreadable("denied")) }
+
+    @Test fun globalSettingRestoresMissingValueByDeletingKey() = runBlocking {
+        var value = "null"
+        val fake = FakeCommandExecutor(handler = { command -> when {
+            command.arguments.take(3) == listOf("settings", "get", "global") -> CommandResult(command.id, 0, "$value\n", "", 1)
+            command.arguments.take(3) == listOf("settings", "put", "global") -> { value = command.arguments[4]; CommandResult(command.id, 0, "", "", 1) }
+            command.arguments.take(3) == listOf("settings", "delete", "global") -> { value = "null"; CommandResult(command.id, 0, "", "", 1) }
+            else -> CommandResult(command.id, 1, "", "unexpected", 1)
+        } })
+        val op = GlobalSettingOperation("global_test", "test_key", "1")
+        val context = OperationContext(fake, installed)
+        val before = op.read(context, "__device__")
+        assertEquals(ResultStatus.APPLIED_VERIFIED, op.apply(context, op.plan(before, "1")).status)
+        assertEquals("1", value)
+        assertEquals(ResultStatus.ROLLED_BACK, op.rollback(context, before).status)
+        assertEquals("null", value)
+    }
 
     @Test fun dozeDoesNotRemovePreexistingWhitelistOnRollback() = runBlocking {
         var whitelisted = true; val fake = FakeCommandExecutor(handler = { command -> when { command.arguments.lastOrNull() == "-com.example.chat" -> { whitelisted = false; CommandResult(command.id, 0, "", "", 1) }; else -> CommandResult(command.id, 0, if (whitelisted) "user,com.example.chat" else "", "", 1) } })

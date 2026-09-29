@@ -100,7 +100,7 @@ private fun HyperNotifyApp(vm: MainViewModel, container: AppContainer) {
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Image(painterResource(R.drawable.hypernotify_launcher), "HyperNotifyFix", Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)))
+                        Image(painterResource(R.drawable.notification_icon), "HyperNotifyFix", Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)))
                         Column {
                             Text("HyperNotify", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text("Tối ưu thông báo nền an toàn", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -153,7 +153,7 @@ private fun HomeScreen(state: UiState, vm: MainViewModel, onSelectApps: () -> Un
     item {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             MetricCard("Đã chọn", state.selected.size.toString(), Icons.Outlined.CheckCircle, Indigo, Modifier.weight(1f))
-            MetricCard("Bản sao lưu", state.history.size.toString(), Icons.Outlined.Backup, Mint, Modifier.weight(1f))
+            MetricCard("Đã tối ưu", state.optimizedPackages.size.toString(), Icons.Outlined.Bolt, Mint, Modifier.weight(1f))
         }
     }
     item {
@@ -325,6 +325,7 @@ private fun PreviewScreen(state: UiState, vm: MainViewModel) = LazyColumn(Modifi
 private fun packageLabel(packageName: String) = when (packageName) {
     "com.google.android.gms" -> "Google Play services"
     "com.google.android.gsf" -> "Google Services Framework"
+    "__device__" -> "Toàn bộ thiết bị"
     else -> packageName
 }
 
@@ -343,6 +344,16 @@ private fun operationLabel(operationId: String) = when (operationId) {
     "appops_run_in_background" -> "Cho phép chạy nền"
     "standby_bucket" -> "Mức ưu tiên App Standby"
     "inactive_state" -> "Trạng thái ứng dụng không hoạt động"
+    "appops_10053" -> "Tự khởi chạy HyperOS mới (10053)"
+    "appops_10008" -> "Tự khởi chạy MIUI (10008)"
+    "appops_wake_lock" -> "Cho phép giữ CPU thức"
+    "appops_start_foreground" -> "Cho phép dịch vụ foreground"
+    "appops_schedule_exact_alarm" -> "Cho phép báo thức chính xác"
+    "network_background_whitelist" -> "Không chặn dữ liệu nền"
+    "global_app_standby_off" -> "Tắt App Standby toàn thiết bị"
+    "global_cached_apps_freezer_off" -> "Tắt đóng băng tiến trình cached"
+    "global_mobile_data_always_on" -> "Giữ dữ liệu di động hoạt động"
+    "global_wifi_never_sleep" -> "Không cho Wi-Fi ngủ"
     else -> operationId
 }
 
@@ -357,6 +368,8 @@ private fun displayValue(operationId: String, value: String?) = when {
     operationId == "doze_whitelist" -> "Bị giới hạn"
     operationId == "inactive_state" && value == "false" -> "Đang hoạt động"
     operationId == "inactive_state" -> "Inactive"
+    operationId == "network_background_whitelist" && value == "true" -> "Được dùng dữ liệu nền"
+    operationId.startsWith("global_") -> value
     value == "allow" -> "Cho phép"
     else -> value
 }
@@ -427,6 +440,17 @@ private fun operationDisplayName(id: String) = when (id) {
     "xiaomi_cloud_lowlatency" -> "Ưu tiên kết nối đám mây Xiaomi"
     "doze_whitelist" -> "Cho phép hoạt động trong Doze"
     "appops_run_any_in_background" -> "Cho phép chạy nền (AppOps)"
+    "appops_run_in_background" -> "Cho phép chạy nền"
+    "appops_10053" -> "Tự khởi chạy HyperOS mới (10053)"
+    "appops_10008" -> "Tự khởi chạy MIUI (10008)"
+    "appops_wake_lock" -> "Giữ CPU thức (WAKE_LOCK)"
+    "appops_start_foreground" -> "Khởi chạy foreground service"
+    "appops_schedule_exact_alarm" -> "Báo thức chính xác"
+    "network_background_whitelist" -> "Whitelist dữ liệu nền"
+    "global_app_standby_off" -> "Tắt App Standby toàn thiết bị"
+    "global_cached_apps_freezer_off" -> "Tắt cached app freezer"
+    "global_mobile_data_always_on" -> "Giữ dữ liệu di động hoạt động"
+    "global_wifi_never_sleep" -> "Không cho Wi-Fi ngủ"
     else -> id
 }
 
@@ -463,8 +487,24 @@ private fun SettingsScreen(state: UiState, vm: MainViewModel, container: AppCont
             }
         }
     }
-    item { SettingsToggle(Icons.Outlined.Tune, "Chế độ nâng cao", "Hiển thị các tùy chọn tương thích thử nghiệm", state.advanced, vm::setAdvanced) }
-    item { SettingsToggle(Icons.Outlined.WarningAmber, "Kiểm tra Xiaomi thử nghiệm", "Chưa được xác minh đầy đủ trên Xiaomi 15 Ultra", state.experimental, vm::setExperimental, state.advanced) }
+    item { SettingsToggle(Icons.Outlined.Tune, "Tùy chọn nâng cao", "Mở các can thiệp không cần thiết cho mọi ứng dụng", state.advanced, vm::setAdvanced) }
+    if (state.advanced) {
+        item {
+            Surface(color = Amber.copy(alpha = .10f), shape = RoundedCornerShape(18.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Amber.copy(alpha = .30f))) {
+                Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+                    Icon(Icons.Outlined.WarningAmber, null, tint = Color(0xFF9A6700))
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Chỉ bật khi cấu hình an toàn chưa đủ", fontWeight = FontWeight.Bold, color = Color(0xFF6B4E00))
+                        Text("Các mục dưới đây được sao lưu và xác minh, nhưng có thể tăng pin tiêu thụ hoặc thay đổi hành vi của toàn thiết bị.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF6B4E00))
+                    }
+                }
+            }
+        }
+        item { SettingsToggle(Icons.Outlined.AutoAwesome, "Autostart nội bộ Xiaomi", "Thử AppOps 10053 và 10008 nếu ROM hỗ trợ", state.xiaomiAutostartOps, vm::setXiaomiAutostartOps) }
+        item { SettingsToggle(Icons.Outlined.NetworkCheck, "Whitelist dữ liệu nền", "Cho app dùng mạng khi Data Saver hoặc policy nền hoạt động", state.networkWhitelist, vm::setNetworkWhitelist) }
+        item { SettingsToggle(Icons.Outlined.Memory, "AppOps chạy nền mạnh", "WAKE_LOCK, foreground service và exact alarm", state.aggressiveAppOps, vm::setAggressiveAppOps) }
+        item { SettingsToggle(Icons.Outlined.BatteryAlert, "Profile toàn hệ thống — hao pin", "Tắt App Standby/freezer, giữ mobile data và Wi-Fi hoạt động", state.aggressiveSystemProfile, vm::setAggressiveSystemProfile) }
+    }
     state.selected.firstOrNull()?.let { pkg ->
         item {
             ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color.White)) {
