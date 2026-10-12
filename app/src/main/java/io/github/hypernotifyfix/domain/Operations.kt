@@ -307,6 +307,50 @@ class GlobalSettingOperation(
     }
 }
 
+/**
+ * HyperOS GreezeManagerService has a runtime-only GMS limiter (`mGmsLimitEnabled`) that freezes
+ * Play services shortly after screen-off. The shell UID holds DUMP, so the debug interface can
+ * switch it off. The flag resets on reboot, which is also the ultimate rollback.
+ */
+class GreezerGmsLimitOperation : ReversibleOperation {
+    override val id = "greezer_gms_limit_off"
+    override val riskLevel = RiskLevel.EXPERIMENTAL
+    private fun dump() = PrivilegedCommand("$id.read", listOf("dumpsys", "greezer"))
+    private fun set(mode: String) = PrivilegedCommand("$id.$mode", listOf("dumpsys", "greezer", "IM", "GMS", mode))
+
+    override suspend fun probe(context: OperationContext, packageName: String) =
+        if (read(context, packageName).value is SnapshotValue.Present) CapabilityStatus.Supported else CapabilityStatus.Unsupported("Greezer GMS limiter not exposed by this ROM")
+
+    override suspend fun read(context: OperationContext, packageName: String): OperationSnapshot {
+        val result = context.executor.execute(dump())
+        val enabled = if (result.successful) GreezerParser.gmsLimitEnabled(result.stdout) else null
+        return OperationSnapshot(id, packageName, enabled?.let { SnapshotValue.Present(it.toString()) } ?: SnapshotValue.Unsupported(result.stderr.ifBlank { "mGmsLimitEnabled not found" }))
+    }
+
+    override fun plan(current: OperationSnapshot, desired: String) = OperationPlan(id, current.packageName, current, desired, riskLevel)
+
+    override suspend fun apply(context: OperationContext, plan: OperationPlan): OperationResult {
+        if (plan.before.value !is SnapshotValue.Present || plan.desired !in setOf("true", "false")) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, "Không có bản sao lưu hợp lệ")
+        val result = context.executor.execute(set(if (plan.desired == "true") "enable" else "disable"))
+        if (!result.successful) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, result.stderr.ifBlank { "dumpsys greezer thất bại" })
+        val verified = verify(context, plan)
+        return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) "Đã tắt bộ giới hạn GMS (mất sau khi khởi động lại)" else "Trạng thái đọc lại không khớp", verified)
+    }
+
+    override suspend fun verify(context: OperationContext, plan: OperationPlan) = (read(context, plan.packageName).value as? SnapshotValue.Present)?.raw == plan.desired
+
+    override suspend fun rollback(context: OperationContext, snapshot: OperationSnapshot): OperationResult {
+        val original = (snapshot.value as? SnapshotValue.Present)?.raw ?: return OperationResult(id, ResultStatus.ROLLBACK_FAILED, "Không có trạng thái Greezer ban đầu")
+        context.executor.execute(set(if (original == "true") "enable" else "disable"))
+        val restored = (read(context, snapshot.packageName).value as? SnapshotValue.Present)?.raw == original
+        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) "Đã khôi phục Greezer" else "Khởi động lại máy để khôi phục Greezer", restored)
+    }
+}
+
+object GreezerParser {
+    fun gmsLimitEnabled(output: String): Boolean? = Regex("mGmsLimitEnabled\\s*:\\s*(true|false)").find(output)?.groupValues?.get(1)?.toBooleanStrictOrNull()
+}
+
 object DozeParser {
     private val packagePattern = Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+")
     fun parse(output: String): Set<String> = output.lineSequence().mapNotNull { raw ->

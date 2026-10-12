@@ -16,6 +16,30 @@ class OperationsTest {
         assertFalse(StandbyBucketParser.isOptimal("40"))
     }
 
+    @Test fun `greezer parser reads gms limiter flag`() {
+        assertEquals(true, GreezerParser.gmsLimitEnabled("GreezeManager:\n  mGmsLimitEnabled : true\n"))
+        assertEquals(false, GreezerParser.gmsLimitEnabled("mGmsLimitEnabled: false"))
+        assertNull(GreezerParser.gmsLimitEnabled("Can't find service: greezer"))
+    }
+
+    @Test fun `greezer operation disables verifies and restores`() = runBlocking {
+        var enabled = true
+        val fake = FakeCommandExecutor(handler = { command -> when (command.arguments) {
+            listOf("dumpsys", "greezer") -> CommandResult(command.id, 0, "mGmsLimitEnabled : $enabled", "", 1)
+            listOf("dumpsys", "greezer", "IM", "GMS", "disable") -> { enabled = false; CommandResult(command.id, 0, "", "", 1) }
+            listOf("dumpsys", "greezer", "IM", "GMS", "enable") -> { enabled = true; CommandResult(command.id, 0, "", "", 1) }
+            else -> CommandResult(command.id, 1, "", "unexpected", 1)
+        } })
+        val op = GreezerGmsLimitOperation()
+        val context = OperationContext(fake, installed)
+        val snapshot = op.read(context, "__device__")
+        assertEquals(SnapshotValue.Present("true"), snapshot.value)
+        assertEquals(ResultStatus.APPLIED_VERIFIED, op.apply(context, op.plan(snapshot, "false")).status)
+        assertFalse(enabled)
+        assertEquals(ResultStatus.ROLLED_BACK, op.rollback(context, snapshot).status)
+        assertTrue(enabled)
+    }
+
     @Test fun `inactive parser reads activity manager output`() {
         assertEquals(false, InactiveParser.parse("Idle=false\n"))
         assertEquals(true, InactiveParser.parse("Inactive=true\n"))

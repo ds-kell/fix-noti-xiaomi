@@ -1,20 +1,19 @@
 package io.github.hypernotifyfix.data
 
-import android.app.AppOpsManager
-import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Build
-import android.os.PowerManager
 import android.provider.Settings
 import io.github.hypernotifyfix.BuildConfig
+import io.github.hypernotifyfix.core.helper.MilletHelperClient
 import io.github.hypernotifyfix.core.model.*
 import io.github.hypernotifyfix.core.shell.PrivilegedCommand
 import io.github.hypernotifyfix.core.shell.PrivilegedCommandExecutor
+import io.github.hypernotifyfix.core.system.GmsSignals
 import io.github.hypernotifyfix.domain.PackageValidator
-import io.github.hypernotifyfix.domain.XiaomiWhitelist
+import io.github.hypernotifyfix.domain.WhitelistRepair
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -38,21 +37,6 @@ class DeviceRepository(private val executor: PrivilegedCommandExecutor) {
         val fingerprintHash = MessageDigest.getInstance("SHA-256").digest(Build.FINGERPRINT.toByteArray()).joinToString("") { "%02x".format(it) }.take(16)
         val suffix = Regex("(?:CNXM|MIXM|EUXM)", RegexOption.IGNORE_CASE).find(listOfNotNull(hyper, Build.FINGERPRINT).joinToString(" "))?.value?.uppercase()
         return DeviceInfo(Build.MANUFACTURER, Build.BRAND, Build.MODEL, Build.DEVICE, Build.VERSION.SDK_INT, fingerprintHash, Build.VERSION.SECURITY_PATCH.orEmpty(), hyper, suffix)
-    }
-}
-
-data class PublicDiagnostic(val notificationsEnabled: Boolean, val batteryExempt: Boolean, val backgroundRestricted: Boolean?)
-class PublicDiagnosticRepository(private val context: Context) {
-    fun read(packageName: String): PublicDiagnostic {
-        val pm = context.packageManager; val info = pm.getApplicationInfo(packageName, 0)
-        val appContext = context.createPackageContext(packageName, 0)
-        val notifications = if (Build.VERSION.SDK_INT >= 24) appContext.getSystemService(NotificationManager::class.java)?.areNotificationsEnabled() ?: false else true
-        val battery = context.getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) ?: false
-        val restricted = if (Build.VERSION.SDK_INT >= 28) context.getSystemService(AppOpsManager::class.java)?.let {
-            val mode = if (Build.VERSION.SDK_INT >= 29) it.unsafeCheckOpNoThrow("android:run_any_in_background", info.uid, packageName) else @Suppress("DEPRECATION") it.checkOpNoThrow("android:run_any_in_background", info.uid, packageName)
-            mode != AppOpsManager.MODE_ALLOWED
-        } else null
-        return PublicDiagnostic(notifications, battery, restricted)
     }
 }
 
@@ -97,11 +81,17 @@ class SettingsNavigator(private val context: Context) {
     fun modifySystemSettings() = launch(listOf(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}"))))
 }
 
-class BackgroundMaintenanceStore(private val context: Context) {
-    private val prefs = context.getSharedPreferences("background_maintenance", Context.MODE_PRIVATE)
+class BackgroundMaintenanceStore(context: Context) {
+    private val context = context.applicationContext
+    // Device-protected so the boot receiver can run before first unlock (LOCKED_BOOT_COMPLETED).
+    private val prefs = this.context.createDeviceProtectedStorageContext().let { storage ->
+        runCatching { if (!storage.getSharedPreferences(PREFS, Context.MODE_PRIVATE).contains("packages")) storage.moveSharedPreferencesFrom(this.context, PREFS) }
+        storage.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    }
     private val keys = listOf("MILLET_NO_RESTRICT_APP", "millet_white", "cloud_lowlatency_whitelist")
+    val helper = MilletHelperClient(this.context)
 
-    fun canWrite(): Boolean = Settings.System.canWrite(context)
+    fun canWrite(): Boolean = runCatching { Settings.System.canWrite(context) }.getOrDefault(false)
     fun packages(): Set<String> = prefs.getStringSet("packages", emptySet()).orEmpty()
     fun setPackages(packages: Set<String>) {
         val safe = packages.filter { it.matches(Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+")) }.toSet()
@@ -109,26 +99,65 @@ class BackgroundMaintenanceStore(private val context: Context) {
     }
     fun lastResult(): String? = prefs.getString("last_result", null)
 
-    fun reapply(): Boolean {
-        if (!canWrite()) return record(false, "Chưa có quyền sửa cài đặt hệ thống")
-        val protected = packages()
-        if (protected.isEmpty()) return record(false, "Chưa có ứng dụng cần duy trì")
-        var appliedKeys = 0
-        for (key in keys) {
-            val current = Settings.System.getString(context.contentResolver, key) ?: continue
-            var merged = current
-            for (pkg in protected.sorted()) merged = XiaomiWhitelist.merge(merged, pkg)
-                ?: return record(false, "Định dạng $key không an toàn")
-            val written = Settings.System.putString(context.contentResolver, key, merged)
-            val verified = written && protected.all { XiaomiWhitelist.parse(Settings.System.getString(context.contentResolver, key).orEmpty())?.tokens?.contains(it) == true }
-            if (!verified) return record(false, "Không xác minh được $key sau khi ghi")
-            appliedKeys++
-        }
-        return record(appliedKeys > 0, if (appliedKeys > 0) "Đã tự phục hồi $appliedKeys whitelist nền Xiaomi" else "ROM không cung cấp whitelist Xiaomi có thể ghi")
+    /** User selection plus Play Store and HyperNotify itself, mirroring GMS-Protect's protected set. */
+    private fun requiredPackages(): Set<String> {
+        val extras = listOf(PLAY_STORE, context.packageName).filter { pkg -> runCatching { context.packageManager.getPackageInfo(pkg, 0) }.isSuccess }
+        return packages() + extras
     }
+
+    fun reapply(reason: String = "app"): Boolean {
+        if (packages().isEmpty()) return record(false, "Chưa có ứng dụng cần duy trì")
+        val required = requiredPackages()
+        if (helper.isInstalled()) {
+            // configure() also runs the protection pass and re-arms the helper's MILLET watcher.
+            helper.configure(required)?.let { status -> return record(status.lastSuccess, status.lastResult ?: "Helper không trả kết quả") }
+            // Writing directly would only hit the targetSdk block the helper exists to avoid.
+            GmsSignals.refreshAll(context)
+            return record(false, "HyperOS chặn khởi chạy MILLET helper; mở app khi Shizuku đang chạy để cấp lại quyền tự khởi chạy")
+        }
+        GmsSignals.refreshAll(context)
+        return reapplyDirect(required, reason)
+    }
+
+    /** Fallback without the helper: works only where HyperOS still accepts the write from a modern targetSdk. */
+    private fun reapplyDirect(required: Set<String>, reason: String): Boolean {
+        if (!canWrite()) return record(false, "Chưa có quyền sửa cài đặt hệ thống")
+        var healthyKeys = 0
+        var repairedKeys = 0
+        for (key in keys) {
+            val current = runCatching { Settings.System.getString(context.contentResolver, key) }
+                .getOrElse { return record(false, "HyperOS không cho đọc khóa $key") }
+            when (val decision = WhitelistRepair.plan(current, prefs.getString("last_good_$key", null), required)) {
+                WhitelistRepair.Decision.Absent -> continue
+                is WhitelistRepair.Decision.Refuse -> return record(false, "Định dạng $key không an toàn")
+                is WhitelistRepair.Decision.Unchanged -> { rememberLastGood(key, decision.healthy); healthyKeys++ }
+                is WhitelistRepair.Decision.Write -> {
+                    val written = runCatching { Settings.System.putString(context.contentResolver, key, decision.value) }
+                        .getOrElse { return record(false, "HyperOS chặn ghi khóa $key với targetSdk hiện đại; hãy cài MILLET helper") }
+                    val readBack = runCatching { Settings.System.getString(context.contentResolver, key) }
+                        .getOrElse { return record(false, "Đã ghi nhưng HyperOS chặn đọc lại khóa $key") }
+                    if (!written || !WhitelistRepair.containsAll(readBack, required)) return record(false, "Không xác minh được $key sau khi ghi")
+                    rememberLastGood(key, readBack!!)
+                    healthyKeys++; repairedKeys++
+                }
+            }
+        }
+        return record(healthyKeys > 0, when {
+            healthyKeys == 0 -> "ROM không cung cấp whitelist Xiaomi có thể ghi"
+            repairedKeys > 0 -> "Đã tự phục hồi $repairedKeys whitelist nền Xiaomi ($reason)"
+            else -> "Whitelist Xiaomi vẫn đầy đủ ($reason)"
+        })
+    }
+
+    private fun rememberLastGood(key: String, value: String) { if (value.isNotBlank()) prefs.edit().putString("last_good_$key", value).apply() }
 
     private fun record(success: Boolean, message: String): Boolean {
         prefs.edit().putString("last_result", message).putLong("last_run", System.currentTimeMillis()).apply()
         return success
+    }
+
+    private companion object {
+        const val PREFS = "background_maintenance"
+        const val PLAY_STORE = "com.android.vending"
     }
 }

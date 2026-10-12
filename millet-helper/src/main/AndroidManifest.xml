@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <!-- Declared identically by the main app so install order never matters. -->
+    <permission android:name="io.github.hypernotifyfix.permission.MILLET_HELPER" android:protectionLevel="signature" />
+    <uses-permission android:name="io.github.hypernotifyfix.permission.MILLET_HELPER" />
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application android:allowBackup="false" android:label="HyperNotify MILLET helper" android:icon="@android:drawable/ic_lock_idle_lock">
+        <provider
+            android:name=".ControlProvider"
+            android:authorities="io.github.hypernotifyfix.millethelper.control"
+            android:directBootAware="true"
+            android:exported="true"
+            android:permission="io.github.hypernotifyfix.permission.MILLET_HELPER" />
+        <service
+            android:name=".WatchJobService"
+            android:directBootAware="true"
+            android:exported="true"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+        <receiver android:name=".BootReceiver" android:directBootAware="true" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.USER_UNLOCKED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

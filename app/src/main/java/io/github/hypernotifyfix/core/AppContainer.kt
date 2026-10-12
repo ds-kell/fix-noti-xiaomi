@@ -7,10 +7,10 @@ import io.github.hypernotifyfix.data.*
 import io.github.hypernotifyfix.domain.*
 
 class AppContainer(context: Context) {
+    val appContext: Context = context.applicationContext
     val executor = ShizukuExecutor(context)
     val catalog = AppCatalog(context)
     val device = DeviceRepository(executor)
-    val publicDiagnostics = PublicDiagnosticRepository(context)
     val sessions = SessionStore(context)
     val registry = OptimizationRegistry(context)
     val reports = ReportExporter(context)
@@ -38,6 +38,7 @@ class AppContainer(context: Context) {
         GlobalSettingOperation("global_mobile_data_always_on", "mobile_data_always_on", "1"),
         GlobalSettingOperation("global_wifi_never_sleep", "wifi_sleep_policy", "2"),
     )
-    val operations = (packageOperations + systemOperations).associateBy { it.id }
+    val greezerOperation = GreezerGmsLimitOperation()
+    val operations = (packageOperations + systemOperations + greezerOperation).associateBy { it.id }
     val operationContext = OperationContext(executor, catalog)
 }

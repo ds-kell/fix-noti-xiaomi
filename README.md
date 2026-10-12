@@ -31,6 +31,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 - Private, schema-versioned backup precedes writes. Apply success requires read-back verification; a transaction failure rolls back earlier verified changes.
 - Implemented, runtime-probed: Doze whitelist add/exact rollback and `RUN_ANY_IN_BACKGROUND` AppOp exact-mode restore.
 - Read-only/public diagnostics: device/ROM metadata, notification permission availability, battery exemption, background restriction, Shizuku status/effective UID.
+- MILLET helper: an optional bundled `targetSdk 22` companion, installed once through Shizuku, keeps `MILLET_NO_RESTRICT_APP` (and `millet_white`/`cloud_lowlatency_whitelist` when present) repaired after reboots and PowerKeeper rewrites without Shizuku. See [decision 008](docs/DECISIONS.md).
+- HyperOS GMS nudges: MiPush whitelist refresh, Aurogon allowlist reload (optional screen-off keep-alive), FCM connection check/reconnect, and an experimental Greezer GMS-limiter switch (Shizuku, resets on reboot).
 - Experimental: Xiaomi `cloud_lowlatency_whitelist` remains an unverified candidate. Absent keys are never created; the current build exposes no automatic hidden-setting write.
 - Manual Settings intents are resolved before launch and fall back to Android App Info.
 

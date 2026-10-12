@@ -6,4 +6,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "HyperNotifyFix"
-include(":app")
+include(":app", ":millet-helper", ":whitelist-core")

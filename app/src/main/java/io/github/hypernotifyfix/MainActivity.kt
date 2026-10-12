@@ -1,10 +1,15 @@
 package io.github.hypernotifyfix
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import android.graphics.drawable.Drawable
 import android.widget.ImageView
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
@@ -17,7 +22,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.FactCheck
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.FactCheck
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -37,6 +45,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.hypernotifyfix.core.AppContainer
@@ -45,6 +55,10 @@ import io.github.hypernotifyfix.core.model.OperationResult
 import io.github.hypernotifyfix.core.model.ResultStatus
 import io.github.hypernotifyfix.core.model.RiskLevel
 import io.github.hypernotifyfix.core.model.SnapshotValue
+import io.github.hypernotifyfix.core.system.AutostartState
+import io.github.hypernotifyfix.core.system.FcmState
+import java.text.DateFormat
+import java.util.Date
 
 private val Indigo = Color(0xFF4F46E5)
 private val Mint = Color(0xFF10B981)
@@ -81,7 +95,11 @@ private fun HyperNotifyApp(vm: MainViewModel, container: AppContainer) {
     val state by vm.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
+    var showGuide by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = showGuide) { showGuide = false }
     val snackbarHostState = remember { SnackbarHostState() }
+    // Autostart/battery/WRITE_SETTINGS are changed in system screens; re-read when the user comes back.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refreshSetupState() }
     LaunchedEffect(state.message) {
         state.message?.let { message -> snackbarHostState.showSnackbar(message); vm.clearMessage() }
     }
@@ -98,6 +116,8 @@ private fun HyperNotifyApp(vm: MainViewModel, container: AppContainer) {
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
+                navigationIcon = { if (showGuide) IconButton({ showGuide = false }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Quay lại") } },
+                actions = { if (!showGuide) IconButton({ showGuide = true }) { Icon(Icons.AutoMirrored.Outlined.HelpOutline, "Hướng dẫn sử dụng", tint = Indigo) } },
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Image(painterResource(R.drawable.notification_icon), "HyperNotifyFix", Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)))
@@ -114,8 +134,8 @@ private fun HyperNotifyApp(vm: MainViewModel, container: AppContainer) {
             NavigationBar(containerColor = Color.White, tonalElevation = 3.dp) {
                 destinations.forEachIndexed { index, destination ->
                     NavigationBarItem(
-                        selected = tab == index,
-                        onClick = { tab = index },
+                        selected = tab == index && !showGuide,
+                        onClick = { tab = index; showGuide = false },
                         icon = { Icon(if (tab == index) destination.selectedIcon else destination.icon, destination.label) },
                         label = { Text(destination.label, maxLines = 1) },
                         colors = NavigationBarItemDefaults.colors(indicatorColor = Indigo.copy(alpha = .12f), selectedIconColor = Indigo, selectedTextColor = Indigo)
@@ -125,19 +145,25 @@ private fun HyperNotifyApp(vm: MainViewModel, container: AppContainer) {
         }
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
-            when (tab) {
-                0 -> HomeScreen(state, vm, onSelectApps = { tab = 1 })
+            if (showGuide) GuideScreen(state) { target -> tab = target; showGuide = false } else when (tab) {
+                0 -> HomeScreen(state, vm, onSelectApps = { tab = 1 }, onOpenGuide = { showGuide = true })
                 1 -> AppsScreen(state, query, { query = it }, vm::select, vm::revokePackage, vm::restoreAll, container.catalog::icon)
                 2 -> PreviewScreen(state, vm)
                 3 -> HistoryScreen(state, vm::restore)
-                else -> SettingsScreen(state, vm, container)
+                else -> {
+                    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.setAurogonKeepAlive(true) }
+                    SettingsScreen(state, vm) { enabled ->
+                        // The keep-alive notification is only visible with POST_NOTIFICATIONS; the service runs either way.
+                        if (enabled && Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS) else vm.setAurogonKeepAlive(enabled)
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun HomeScreen(state: UiState, vm: MainViewModel, onSelectApps: () -> Unit) = LazyColumn(
+private fun HomeScreen(state: UiState, vm: MainViewModel, onSelectApps: () -> Unit, onOpenGuide: () -> Unit) = LazyColumn(
     modifier = Modifier.fillMaxSize(),
     contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 28.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -148,7 +174,20 @@ private fun HomeScreen(state: UiState, vm: MainViewModel, onSelectApps: () -> Un
             Text("Tìm và gỡ các giới hạn khiến ứng dụng nhận thông báo chậm hoặc bị mất.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+    if (state.optimizedPackages.isEmpty()) item {
+        Surface(onClick = onOpenGuide, color = Indigo.copy(alpha = .07f), shape = RoundedCornerShape(16.dp)) {
+            Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(Icons.AutoMirrored.Outlined.MenuBook, null, tint = Indigo)
+                Column(Modifier.weight(1f)) {
+                    Text("Lần đầu sử dụng?", fontWeight = FontWeight.SemiBold)
+                    Text("Xem hướng dẫn từng bước, từ Shizuku tới MILLET helper", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = Indigo)
+            }
+        }
+    }
     item { ShizukuStatusCard(state, vm::requestShizuku) }
+    item { FcmStatusCard(state, vm::checkFcm, vm::reconnectFcm) }
     state.device?.let { device -> item { DeviceCard(device.model, device.manufacturer, device.sdk, device.hyperOsVersion, device.romRegion, device.securityPatch) } }
     item {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -202,6 +241,32 @@ private fun ShizukuStatusCard(state: UiState, requestPermission: () -> Unit) {
             }
             if (!connected) FilledTonalButton(onClick = requestPermission, contentPadding = PaddingValues(horizontal = 14.dp)) { Text("Kết nối") }
             else Icon(Icons.Filled.CheckCircle, "Đã kết nối", tint = Mint)
+        }
+    }
+}
+
+@Composable
+private fun FcmStatusCard(state: UiState, check: () -> Unit, reconnect: () -> Unit) {
+    val (label, color) = when (state.fcm?.state) {
+        FcmState.CONNECTED -> "Đang kết nối" to Mint
+        FcmState.DISCONNECTED -> "Mất kết nối" to Color(0xFFD14343)
+        FcmState.UNKNOWN -> "Không rõ" to Amber
+        null -> "Chưa kiểm tra" to MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color.White)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(Icons.Outlined.CloudSync, null, tint = color)
+                Column(Modifier.weight(1f)) {
+                    Text("Kết nối FCM của Google", fontWeight = FontWeight.Bold)
+                    Text(state.fcm?.let { status -> status.rawStatus?.let { "Mã trạng thái GMS: $it" } ?: status.detail } ?: "Kênh push dùng chung cho mọi ứng dụng dùng FCM", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                StatusPill(label, color)
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(check, Modifier.weight(1f), enabled = !state.fcmBusy) { Text(if (state.fcmBusy) "Đang kiểm tra…" else "Kiểm tra") }
+                if (state.fcm?.state == FcmState.DISCONNECTED) Button(reconnect, Modifier.weight(1f), enabled = !state.fcmBusy) { Text("Kết nối lại") }
+            }
         }
     }
 }
@@ -336,6 +401,7 @@ private fun riskLabel(risk: RiskLevel) = when (risk) {
 }
 
 private fun operationLabel(operationId: String) = when (operationId) {
+    "greezer_gms_limit_off" -> "Tắt bộ giới hạn GMS của Greezer"
     "xiaomi_millet_no_restrict" -> "Miễn giới hạn nền HyperOS"
     "xiaomi_millet_white" -> "Danh sách ưu tiên Millet"
     "xiaomi_cloud_lowlatency" -> "Ưu tiên kết nối đám mây Xiaomi"
@@ -370,6 +436,8 @@ private fun displayValue(operationId: String, value: String?) = when {
     operationId == "inactive_state" -> "Inactive"
     operationId == "network_background_whitelist" && value == "true" -> "Được dùng dữ liệu nền"
     operationId.startsWith("global_") -> value
+    operationId == "greezer_gms_limit_off" && value == "true" -> "Đang giới hạn GMS"
+    operationId == "greezer_gms_limit_off" -> "Không giới hạn GMS"
     value == "allow" -> "Cho phép"
     else -> value
 }
@@ -435,6 +503,7 @@ private fun OperationResultCard(result: OperationResult, appLabel: String?) {
 }
 
 private fun operationDisplayName(id: String) = when (id) {
+    "greezer_gms_limit_off" -> "Tắt bộ giới hạn GMS của Greezer"
     "xiaomi_millet_no_restrict" -> "Miễn giới hạn nền HyperOS"
     "xiaomi_millet_white" -> "Danh sách ưu tiên Millet"
     "xiaomi_cloud_lowlatency" -> "Ưu tiên kết nối đám mây Xiaomi"
@@ -465,28 +534,11 @@ private fun HistoryScreen(state: UiState, restore: (OptimizationSession) -> Unit
 private fun EmptyState(icon: ImageVector, title: String, text: String, color: Color = Indigo) = Column(Modifier.fillMaxWidth().padding(vertical = 42.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) { Surface(color = color.copy(alpha = .08f), shape = RoundedCornerShape(20.dp)) { Icon(icon, null, Modifier.padding(16.dp).size(30.dp), tint = color) }; Text(title, fontWeight = FontWeight.SemiBold); Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
 
 @Composable
-private fun SettingsScreen(state: UiState, vm: MainViewModel, container: AppContainer) = LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+private fun SettingsScreen(state: UiState, vm: MainViewModel, onAurogon: (Boolean) -> Unit) = LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     item { ScreenHeader("Cài đặt", "Điều khiển nâng cao và các bước HyperOS cần người dùng xác nhận.") }
-    item {
-        ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color.White)) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Icon(if (state.maintenanceCanWrite) Icons.Filled.VerifiedUser else Icons.Outlined.BuildCircle, null, tint = if (state.maintenanceCanWrite) Mint else Amber)
-                    Column(Modifier.weight(1f)) {
-                        Text("Tự phục hồi sau khi khởi động", fontWeight = FontWeight.Bold)
-                        Text(if (state.maintenanceCanWrite) "Đã có quyền sửa cài đặt hệ thống" else "Cần cấp quyền một lần, không phụ thuộc Shizuku", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                Text("Đang bảo vệ ${state.maintenancePackages} package. App sẽ ghi lại whitelist Xiaomi khi máy khởi động, người dùng mở khóa hoặc HyperNotify được cập nhật.", style = MaterialTheme.typography.bodySmall)
-                state.maintenanceStatus?.let { Text("Lần gần nhất: $it", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (!state.maintenanceCanWrite) Button(vm::requestMaintenancePermission, Modifier.weight(1f)) { Text("Cấp quyền") }
-                    OutlinedButton(vm::reapplyMaintenance, Modifier.weight(1f)) { Text("Kiểm tra và áp dụng") }
-                }
-                TextButton({ container.settings.xiaomiAutostart("io.github.hypernotifyfix") }, Modifier.fillMaxWidth()) { Text("Mở cài đặt tự khởi chạy HyperNotify") }
-            }
-        }
-    }
+    item { MaintenanceCard(state, vm) }
+    item { SetupCard(state, vm) }
+    item { SettingsToggle(Icons.Outlined.ScreenLockPortrait, "Giữ allowlist Aurogon khi tắt màn hình", "Làm mới sau 40 giây, 2 phút rồi mỗi 10 phút; chạy dịch vụ nền, hơi tốn pin", state.aurogonKeepAlive, onAurogon) }
     item { SettingsToggle(Icons.Outlined.Tune, "Tùy chọn nâng cao", "Mở các can thiệp không cần thiết cho mọi ứng dụng", state.advanced, vm::setAdvanced) }
     if (state.advanced) {
         item {
@@ -500,23 +552,11 @@ private fun SettingsScreen(state: UiState, vm: MainViewModel, container: AppCont
                 }
             }
         }
+        item { SettingsToggle(Icons.Outlined.AcUnit, "Tắt bộ giới hạn GMS của Greezer", "Thử nghiệm, cần Shizuku; HyperOS bật lại sau mỗi lần khởi động", state.greezerGmsLimit, vm::setGreezerGmsLimit) }
         item { SettingsToggle(Icons.Outlined.AutoAwesome, "Autostart nội bộ Xiaomi", "Thử AppOps 10053 và 10008 nếu ROM hỗ trợ", state.xiaomiAutostartOps, vm::setXiaomiAutostartOps) }
         item { SettingsToggle(Icons.Outlined.NetworkCheck, "Whitelist dữ liệu nền", "Cho app dùng mạng khi Data Saver hoặc policy nền hoạt động", state.networkWhitelist, vm::setNetworkWhitelist) }
         item { SettingsToggle(Icons.Outlined.Memory, "AppOps chạy nền mạnh", "WAKE_LOCK, foreground service và exact alarm", state.aggressiveAppOps, vm::setAggressiveAppOps) }
         item { SettingsToggle(Icons.Outlined.BatteryAlert, "Profile toàn hệ thống — hao pin", "Tắt App Standby/freezer, giữ mobile data và Wi-Fi hoạt động", state.aggressiveSystemProfile, vm::setAggressiveSystemProfile) }
-    }
-    state.selected.firstOrNull()?.let { pkg ->
-        item {
-            ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color.White)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Danh sách kiểm tra thủ công", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(pkg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    listOf("Đã bật tự khởi chạy", "Tiết kiệm pin: Không hạn chế", "Đã bật thông báo và màn hình khóa", "Đã cho phép dữ liệu nền").forEach { label -> var checked by rememberSaveable(pkg, label) { mutableStateOf(false) }; Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked, { checked = it }); Text(label, style = MaterialTheme.typography.bodyMedium) } }
-                    HorizontalDivider()
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) { TextButton({ container.settings.appInfo(pkg) }) { Text("Thông tin") }; TextButton({ container.settings.xiaomiAutostart(pkg) }) { Text("Tự khởi chạy") }; TextButton({ container.settings.notifications(pkg) }) { Text("Thông báo") } }
-                }
-            }
-        }
     }
 }
 
@@ -524,3 +564,59 @@ private fun SettingsScreen(state: UiState, vm: MainViewModel, container: AppCont
 private fun SettingsToggle(icon: ImageVector, title: String, subtitle: String, checked: Boolean, onChecked: (Boolean) -> Unit, enabled: Boolean = true) = Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) {
     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) { Icon(icon, null, tint = if (enabled) Indigo else MaterialTheme.colorScheme.outline); Column(Modifier.weight(1f)) { Text(title, fontWeight = FontWeight.Medium); Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Switch(checked, onChecked, enabled = enabled) }
 }
+
+private fun formatTime(epochMs: Long) = if (epochMs <= 0) "chưa ghi nhận" else DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(epochMs))
+
+@Composable
+private fun MaintenanceCard(state: UiState, vm: MainViewModel) = ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color.White)) {
+    val helper = state.helperStatus
+    val healthy = if (state.helperInstalled) helper?.canWrite == true && helper.lastSuccess else state.maintenanceCanWrite
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Icon(if (healthy) Icons.Filled.VerifiedUser else Icons.Outlined.BuildCircle, null, tint = if (healthy) Mint else Amber)
+            Column(Modifier.weight(1f)) {
+                Text("Tự phục hồi whitelist MILLET", fontWeight = FontWeight.Bold)
+                Text(if (state.helperInstalled) "MILLET helper đã cài — hoạt động không cần Shizuku" else "Chưa có helper: Android chặn app targetSdk mới ghi khóa MILLET", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Text("Đang bảo vệ ${state.maintenancePackages} package cùng Play Store và HyperNotify. Helper theo dõi thay đổi của MILLET và ghi lại ngay khi HyperOS xóa, kể cả sau khi khởi động lại.", style = MaterialTheme.typography.bodySmall)
+        if (state.helperInstalled && helper != null) {
+            Detail("Quyền sửa cài đặt của helper", if (helper.canWrite) "Đã có" else "Chưa có")
+            Detail("Theo dõi MILLET", if (helper.watcherScheduled) "Đang chờ thay đổi" else "Chưa đăng ký")
+            Detail("HyperOS đã đánh thức helper (ROM này)", formatTime(helper.watcherTriggeredAt))
+            Detail("Tự sửa lần gần nhất", formatTime(helper.autoRepairAt))
+        }
+        state.maintenanceStatus?.let { Text("Lần gần nhất: $it", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!state.helperInstalled || state.helperNeedsUpdate) Button(vm::installHelper, Modifier.weight(1f), enabled = state.uid == 2000 && !state.operationInProgress) { Text(if (state.helperNeedsUpdate) "Cập nhật helper" else "Cài helper") }
+            OutlinedButton(vm::reapplyMaintenance, Modifier.weight(1f)) { Text("Kiểm tra và áp dụng") }
+        }
+        if (!state.helperInstalled && state.uid != 2000) Text("Cài helper cần Shizuku một lần. Sau đó helper tự chạy mà không cần Shizuku.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!state.helperInstalled && !state.maintenanceCanWrite) TextButton(vm::requestMaintenancePermission, Modifier.fillMaxWidth()) { Text("Cấp quyền sửa cài đặt cho HyperNotify") }
+        if (state.helperInstalled) TextButton(vm::uninstallHelper, Modifier.fillMaxWidth(), enabled = state.uid == 2000 && !state.operationInProgress) { Text("Gỡ MILLET helper") }
+    }
+}
+
+@Composable
+private fun SetupCard(state: UiState, vm: MainViewModel) = ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color.White)) {
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Thiết lập nền cho HyperNotify", fontWeight = FontWeight.Bold)
+        val (autostartLabel, autostartColor) = when (state.autostart) {
+            AutostartState.ALLOWED -> "Đã bật" to Mint
+            AutostartState.DENIED -> "Đang tắt" to Color(0xFFD14343)
+            AutostartState.UNKNOWN -> "Không đọc được" to Amber
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Tự khởi chạy", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            StatusPill(autostartLabel, autostartColor)
+            if (state.autostart != AutostartState.ALLOWED) TextButton(vm::openAutostart) { Text("Mở") }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Không tối ưu pin", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            StatusPill(if (state.batteryExempt) "Đã miễn" to Mint else "Đang tối ưu" to Amber)
+            if (!state.batteryExempt) TextButton(vm::requestBatteryExemption) { Text("Cho phép") }
+        }
+    }
+}
+
+@Composable private fun StatusPill(pair: Pair<String, Color>) = StatusPill(pair.first, pair.second)

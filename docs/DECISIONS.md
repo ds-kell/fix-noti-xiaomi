@@ -28,9 +28,16 @@ Generic Android behavior is independent of Xiaomi support. `cloud_lowlatency_whi
 
 Versioned JSON sessions are atomically written to private `filesDir/sessions`. Snapshot values explicitly encode Present(raw), Absent, Unreadable, and Unsupported. Diagnostic exports exclude raw restore payloads.
 
+## 008 — MILLET helper and GMS-Protect techniques
+
+SettingsProvider rejects writes to non-public `Settings.System` keys from apps targeting SDK ≥ 23, so the main app cannot maintain `MILLET_NO_RESTRICT_APP` with WRITE_SETTINGS alone. A separate `:millet-helper` APK targets SDK 22 (the technique used by GMS-Protect), is bundled in the main APK, installed through Shizuku with `--bypass-low-target-sdk-block`, and controlled through a signature-protected provider. It merges (never replaces) the list, rebuilds a transient empty value from the last healthy list, re-arms a JobScheduler content-URI watcher instead of polling, and records evidence keyed to `Build.FINGERPRINT`. Shared parsing/repair lives in `:whitelist-core`.
+
+Also ported from GMS-Protect: MiPush `REFRESH_WHITE_LIST_ACTION` and Aurogon `notifyChange` (both permission-free), an opt-in screen-off Aurogon refresh service, the FCM `local/status` probe with heartbeat/reconnect, and Greezer `mGmsLimitEnabled` via Shizuku `dumpsys` (runtime-only, resets on reboot). Not ported: the GMS binding probe, which only helps while the app is the top activity.
+
 ## Sources reviewed
 
 - Official Shizuku API repository and changelog: https://github.com/RikkaApps/Shizuku-API
 - Android Developers, Doze/App Standby: https://developer.android.com/training/monitoring-device-state/doze-standby
 - Android Developers, background optimization: https://developer.android.com/topic/performance/background-optimization
 - AOSP `DeviceIdleController` and AppOps shell implementations; runtime probing remains mandatory because OEMs may diverge.
+- GMS-Protect (hoanghanhdevvn): https://github.com/hoanghanhdevvn/GMS-Protect

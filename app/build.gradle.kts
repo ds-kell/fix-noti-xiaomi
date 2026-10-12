@@ -13,13 +13,12 @@ android {
         applicationId = "io.github.hypernotifyfix"
         minSdk = 26
         targetSdk = 34
-        versionCode = 16
-        versionName = "0.7.1"
+        versionCode = 20
+        versionName = "0.8.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; aidl = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
-    kotlinOptions { jvmTarget = "17" }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     lint { abortOnError = true; warningsAsErrors = false }
     buildTypes {
@@ -33,7 +32,19 @@ android {
     }
 }
 
+// The targetSdk 22 MILLET helper ships inside the main APK and is installed through Shizuku.
+val helperAssetsDir = layout.buildDirectory.dir("generated/helperAssets")
+val copyMilletHelper by tasks.registering(Copy::class) {
+    dependsOn(":millet-helper:assembleRelease")
+    from(project(":millet-helper").layout.buildDirectory.file("outputs/apk/release/millet-helper-release.apk"))
+    into(helperAssetsDir)
+    rename { "millet-helper.apk" }
+}
+android.sourceSets["main"].assets.srcDir(helperAssetsDir)
+tasks.named("preBuild") { dependsOn(copyMilletHelper) }
+
 dependencies {
+    implementation(project(":whitelist-core"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
@@ -51,3 +62,5 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
 }
+
+kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
