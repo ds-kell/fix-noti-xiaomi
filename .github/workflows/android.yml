@@ -7,7 +7,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '17', cache: gradle}
+      # The default package list includes the long-removed `tools` package, which sdkmanager 16+ rejects.
       - uses: android-actions/setup-android@v3
+        with: {packages: 'platform-tools'}
       - uses: gradle/actions/setup-gradle@v4
       - run: chmod +x gradlew
       - run: ./gradlew assembleDebug testDebugUnitTest lintDebug
