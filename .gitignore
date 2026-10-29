@@ -7,4 +7,5 @@ local.properties
 captures/
 *.jks
 *.keystore
-keystore.properties
+# The project's fixed signing key is committed on purpose so every build can update the last one.
+!signing/hypernotifyfix-release.jks

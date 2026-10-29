@@ -12,6 +12,7 @@ jobs:
         with: {packages: 'platform-tools'}
       - uses: gradle/actions/setup-gradle@v4
       - run: chmod +x gradlew
+      # Signed with the committed key (keystore.properties), so CI APKs install over local builds and vice versa.
       - run: ./gradlew assembleDebug testDebugUnitTest lintDebug
       - uses: actions/upload-artifact@v4
         with: {name: HyperNotifyFix-debug, path: app/build/outputs/apk/debug/app-debug.apk}

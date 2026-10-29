@@ -17,6 +17,8 @@ It cannot guarantee instant notifications. Delivery also depends on the sender's
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
+Signing: every build (debug and release, app and MILLET helper), local or CI, uses the fixed key committed in `signing/` and described by `keystore.properties`, so a new APK always installs over the previous one. Never regenerate it: a different key forces uninstalling the app and helper. Any field can be overridden with `HYPERNOTIFY_SIGNING_<FIELD>` env vars (e.g. `HYPERNOTIFY_SIGNING_STOREFILE`).
+
 ## Use
 
 1. Install Shizuku, enable Developer options and Wireless debugging, pair/start Shizuku, then grant HyperNotifyFix permission.
