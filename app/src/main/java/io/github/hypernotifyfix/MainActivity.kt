@@ -12,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.Image
@@ -644,22 +645,52 @@ private fun SetupCard(state: UiState, vm: MainViewModel) = ElevatedCard(colors =
 private fun AssistantGuardCard(state: UiState, vm: MainViewModel) = ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color.White)) {
     val guard = state.assistantGuard
     val enabled = guard?.enabled == true
+    val current = guard?.assistant?.substringBefore('/')
+    val label = { pkg: String? -> state.assistantCandidates.firstOrNull { it.packageName == pkg }?.label ?: pkg }
+    var picked by rememberSaveable(current) { mutableStateOf(current) }
+    val target = state.assistantCandidates.firstOrNull { it.packageName == picked }
+    val canRun = state.uid == 2000 && !state.operationInProgress
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Icons.Outlined.Mic, null, tint = if (enabled && guard?.healthy == true) Mint else Amber)
             Column(Modifier.weight(1f)) {
-                Text("Giữ trợ lý cho nút nguồn", fontWeight = FontWeight.Bold)
-                Text("HyperOS CN xóa dịch vụ trợ lý (Gemini) sau mỗi lần khởi động; tự đặt lại ngay khi mở khóa", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Trợ lý AI cho nút nguồn", fontWeight = FontWeight.Bold)
+                Text("Chọn AI mở ra khi giữ nút nguồn rồi bấm Áp dụng", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Switch(enabled, vm::setAssistantGuard, enabled = state.uid == 2000 && !state.operationInProgress)
+        }
+        if (state.assistantCandidates.isEmpty()) Text("Chưa có app trợ lý nào. Cài Gemini (app Google), Claude hoặc ChatGPT trước.", style = MaterialTheme.typography.bodySmall)
+        state.assistantCandidates.forEach { candidate ->
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { picked = candidate.packageName }, verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(picked == candidate.packageName, { picked = candidate.packageName })
+                Column(Modifier.weight(1f)) {
+                    Text(candidate.label, fontWeight = FontWeight.Medium)
+                    Text(if (candidate.isXiaoAi) "Trợ lý gốc của Xiaomi" else candidate.packageName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (candidate.packageName == current) StatusPill("Đang dùng", Mint)
+            }
+        }
+        if (target != null) {
+            Text(
+                if (target.isXiaoAi) "Áp dụng sẽ cài lại Xiao AI và trả nút nguồn về mặc định Xiaomi."
+                else "Áp dụng sẽ cấp micro cho ${target.label}, đặt làm trợ lý, đổi hành động giữ nút nguồn, tắt Xiao AI (chọn lại Xiao AI để khôi phục) và bật tự giữ bên dưới.",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Button({ vm.applyAssistant(target) }, Modifier.fillMaxWidth(), enabled = canRun) { Text(if (target.packageName == current) "Áp dụng lại ${target.label}" else "Áp dụng ${target.label}") }
+        }
+        HorizontalDivider()
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("Tự giữ sau khi khởi động lại", fontWeight = FontWeight.Medium)
+                Text("HyperOS CN xóa dịch vụ trợ lý mỗi lần khởi động; tự đặt lại ngay khi mở khóa", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(enabled, vm::setAssistantGuard, enabled = canRun)
         }
         if (guard != null) {
-            Detail("Trợ lý đã chọn", guard.assistant?.substringBefore('/') ?: "Chưa chọn")
-            Detail("Dịch vụ đang dùng", guard.service?.substringBefore('/') ?: "Trống — giữ nút nguồn sẽ không mở trợ lý")
+            Detail("Dịch vụ đang dùng", guard.service?.let { label(it.substringBefore('/')) } ?: "Trống — giữ nút nguồn sẽ không mở trợ lý")
             Detail("Tự sửa lần gần nhất", formatTime(guard.lastRun))
             guard.lastResult?.let { Text("Lần gần nhất: $it", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        if (state.uid != 2000) Text("Bật hoặc tắt cần Shizuku một lần để cấp quyền WRITE_SECURE_SETTINGS. Sau đó chạy không cần Shizuku.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (state.uid != 2000) Text("Áp dụng và bật/tắt cần Shizuku. Sau đó phần tự giữ chạy không cần Shizuku.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

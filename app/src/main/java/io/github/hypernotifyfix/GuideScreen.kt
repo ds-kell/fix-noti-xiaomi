@@ -114,11 +114,12 @@ private fun guideSteps(state: UiState) = listOf(
         action = "Mở Cài đặt" to GuideTab.SETTINGS
     ),
     GuideStep(
-        Icons.Outlined.Mic, "9. Giữ Gemini cho nút nguồn", "Chỉ cần nếu đã gỡ Xiao AI trên ROM nội địa",
+        Icons.Outlined.Mic, "9. Chọn trợ lý AI cho nút nguồn", "Gemini, Claude, ChatGPT… thay cho Xiao AI",
         listOf(
-            "HyperOS CN xóa dịch vụ trợ lý sau mỗi lần khởi động lại, nên giữ nút nguồn không mở được Gemini.",
-            "Trong Cài đặt bật “Giữ trợ lý cho nút nguồn” (cần Shizuku một lần). App tự đặt lại trợ lý ngay khi mở khóa.",
-            "Thẻ đó hiện trợ lý đã chọn, dịch vụ đang dùng và lần tự sửa gần nhất."
+            "Trong Cài đặt, thẻ “Trợ lý AI cho nút nguồn” liệt kê mọi app trợ lý đã cài. Chọn một app rồi bấm “Áp dụng” (cần Shizuku).",
+            "Áp dụng sẽ cấp micro, đặt app làm trợ lý, đổi hành động giữ nút nguồn, tắt Xiao AI và bật “Tự giữ sau khi khởi động lại”.",
+            "HyperOS CN xóa dịch vụ trợ lý sau mỗi lần khởi động; phần tự giữ đặt lại ngay khi mở khóa, không cần Shizuku.",
+            "Muốn quay về Xiao AI: chọn Xiao AI rồi bấm Áp dụng."
         ),
         done = state.assistantGuard?.let { it.enabled && it.healthy }, action = "Mở Cài đặt" to GuideTab.SETTINGS
     ),

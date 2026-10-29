@@ -10,24 +10,30 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.UserManager
 import android.provider.Settings
 import android.service.voice.VoiceInteractionService
+import android.speech.RecognitionService
 import android.util.Log
+import io.github.hypernotifyfix.domain.AssistantCandidate
 import io.github.hypernotifyfix.domain.AssistantRepair
+import io.github.hypernotifyfix.domain.AssistantSwitch
 
 /**
- * HyperOS CN clears `voice_interaction_service` on every boot: a user-installed assistant (Google /
- * Gemini) cannot be bound before first unlock, so the system drops it and never puts it back, and the
- * power-key long press does nothing. Holding WRITE_SECURE_SETTINGS (granted once through Shizuku) is
- * the on/off switch; the guard then restores the service right after unlock and whenever it changes.
+ * HyperOS CN clears `voice_interaction_service` on every boot: a user-installed assistant (Gemini,
+ * Claude, ChatGPT…) cannot be bound before first unlock, so the system drops it and never puts it
+ * back, and the power-key long press does nothing. Holding WRITE_SECURE_SETTINGS (granted through
+ * Shizuku, also by the assistant picker's "Áp dụng") is the on/off switch; the guard then restores
+ * the service right after unlock and whenever it changes.
  */
 object AssistantGuard {
     private const val TAG = "AssistantGuard"
     private const val PREFS = "assistant_guard"
     private const val KEY_SERVICE = "voice_interaction_service"
     private const val KEY_ASSISTANT = "assistant"
+    private const val GOOGLE = "com.google.android.googlequicksearchbox"
     internal const val WATCH_JOB_ID = 4110
     internal const val UNLOCK_JOB_ID = 4111
 
@@ -97,6 +103,35 @@ object AssistantGuard {
         runCatching { Settings.Secure.getString(context.contentResolver, key) }.getOrNull()
             ?.takeIf { it.isNotBlank() && it != "null" }
             ?.let { ComponentName.unflattenFromString(it)?.flattenToString() ?: it }
+
+    /**
+     * Apps that can be the assistant. MATCH_UNINSTALLED_PACKAGES keeps Xiao AI listed after
+     * `pm uninstall --user 0`, so it can be chosen again to restore it.
+     */
+    fun candidates(context: Context): List<AssistantCandidate> {
+        val pm = context.packageManager
+        val flags = PackageManager.MATCH_UNINSTALLED_PACKAGES
+        val recognizers = pm.queryIntentServices(Intent(RecognitionService.SERVICE_INTERFACE), flags)
+            .associate { it.serviceInfo.packageName to ComponentName(it.serviceInfo.packageName, it.serviceInfo.name).flattenToString() }
+        return pm.queryIntentServices(Intent(VoiceInteractionService.SERVICE_INTERFACE), flags)
+            .map { it.serviceInfo }
+            .distinctBy { it.packageName }
+            .filter { it.packageName == AssistantSwitch.XIAO_AI || isInstalled(context, it.packageName) }
+            .map { info ->
+                val label = when (info.packageName) {
+                    // The Gemini assistant is hosted by the Google app, which is labelled just "Google".
+                    GOOGLE -> "Gemini (Google)"
+                    AssistantSwitch.XIAO_AI -> "Xiao AI"
+                    else -> info.applicationInfo.loadLabel(pm).toString()
+                }
+                AssistantCandidate(info.packageName, label, ComponentName(info.packageName, info.name).flattenToString(), recognizers[info.packageName])
+            }
+            .sortedWith(compareBy<AssistantCandidate> { it.isXiaoAi }.thenBy { it.label.lowercase() })
+    }
+
+    fun isInstalled(context: Context, packageName: String) = runCatching {
+        context.packageManager.getApplicationInfo(packageName, PackageManager.MATCH_UNINSTALLED_PACKAGES).flags and ApplicationInfo.FLAG_INSTALLED != 0
+    }.getOrDefault(false)
 
     /** Before unlock PackageManager lists only direct-boot-aware services: exactly the "can bind now" set. */
     private fun availableServices(context: Context): Set<String> =

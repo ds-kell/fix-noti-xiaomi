@@ -14,6 +14,8 @@ import io.github.hypernotifyfix.core.system.FcmState
 import io.github.hypernotifyfix.core.system.FcmStatus
 import io.github.hypernotifyfix.core.system.SetupState
 import io.github.hypernotifyfix.core.model.*
+import io.github.hypernotifyfix.domain.AssistantCandidate
+import io.github.hypernotifyfix.domain.AssistantSwitch
 import io.github.hypernotifyfix.domain.OperationTransaction
 import io.github.hypernotifyfix.domain.StandbyBucketParser
 import io.github.hypernotifyfix.domain.XiaomiWhitelist
@@ -38,6 +40,7 @@ data class UiState(
     val greezerGmsLimit: Boolean = false,
     val aurogonKeepAlive: Boolean = false,
     val assistantGuard: AssistantGuard.Status? = null,
+    val assistantCandidates: List<AssistantCandidate> = emptyList(),
     val helperInstalled: Boolean = false,
     val helperNeedsUpdate: Boolean = false,
     val helperStatus: HelperStatus? = null,
@@ -95,7 +98,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             container.registry.replace(migrated)
         }
         val optimized = container.registry.packages()
-        mutable.update { it.copy(loading = false, shizuku = if (uid != null && uid != 2000) "$status (UID không mong đợi: $uid)" else status, uid = uid, device = device, apps = container.catalog.list(), selected = if (it.selected.isEmpty()) maintained - setOf("com.google.android.gms", "com.google.android.gsf") else it.selected, history = history, optimizedPackages = optimized, alreadyOptimalPackages = container.registry.alreadyOptimal(), maintenanceCanWrite = container.maintenance.canWrite(), maintenancePackages = maintained.size, maintenanceStatus = container.maintenance.lastResult(), helperInstalled = helper.isInstalled(), helperNeedsUpdate = helper.needsUpdate(), helperStatus = helperStatus, aurogonKeepAlive = AurogonKeepAlive.isEnabled(container.appContext), assistantGuard = AssistantGuard.status(container.appContext), autostart =SetupState.autostart(container.appContext), batteryExempt = SetupState.batteryExempt(container.appContext)) }
+        mutable.update { it.copy(loading = false, shizuku = if (uid != null && uid != 2000) "$status (UID không mong đợi: $uid)" else status, uid = uid, device = device, apps = container.catalog.list(), selected = if (it.selected.isEmpty()) maintained - setOf("com.google.android.gms", "com.google.android.gsf") else it.selected, history = history, optimizedPackages = optimized, alreadyOptimalPackages = container.registry.alreadyOptimal(), maintenanceCanWrite = container.maintenance.canWrite(), maintenancePackages = maintained.size, maintenanceStatus = container.maintenance.lastResult(), helperInstalled = helper.isInstalled(), helperNeedsUpdate = helper.needsUpdate(), helperStatus = helperStatus, aurogonKeepAlive = AurogonKeepAlive.isEnabled(container.appContext), assistantGuard = AssistantGuard.status(container.appContext), assistantCandidates = AssistantGuard.candidates(container.appContext), autostart = SetupState.autostart(container.appContext), batteryExempt = SetupState.batteryExempt(container.appContext)) }
         if (state.value.fcm == null) checkFcm()
     }
     fun requestShizuku() = container.executor.requestPermission()
@@ -261,6 +264,24 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     fun setAurogonKeepAlive(value: Boolean) {
         val ok = AurogonKeepAlive.setEnabled(container.appContext, value)
         mutable.update { it.copy(aurogonKeepAlive = AurogonKeepAlive.isEnabled(container.appContext), message = if (ok) null else "Không khởi động được dịch vụ Aurogon") }
+    }
+    fun applyAssistant(target: AssistantCandidate) = viewModelScope.launch {
+        if (!container.executor.isAvailable() || state.value.uid != 2000) { mutable.update { it.copy(message = "Cần Shizuku để đổi trợ lý") }; return@launch }
+        mutable.update { it.copy(operationInProgress = true, message = null) }
+        val app = container.appContext
+        val holders = AssistantSwitch.parseHolders(container.executor.execute(PrivilegedCommand("assistant.holders", listOf("cmd", "role", "get-role-holders", "android.app.role.ASSISTANT"))).stdout)
+        val failed = AssistantSwitch.commands(target, holders, AssistantGuard.isInstalled(app, AssistantSwitch.XIAO_AI), app.packageName)
+            .filterNot { container.executor.execute(it).successful }.map { it.id }
+        // The guard is on from here: it re-applies the choice after every reboot.
+        if (AssistantGuard.isEnabled(app)) { AssistantGuard.watch(app); AssistantGuard.repair(app, "switch") }
+        val status = AssistantGuard.status(app)
+        val switched = status.assistant == target.service && status.service == target.service && failed.none { it in AssistantSwitch.REQUIRED }
+        val message = when {
+            !switched -> "Chưa đổi được sang ${target.label} (lỗi: ${failed.joinToString { it.removePrefix("assistant.") }.ifBlank { "hệ thống không giữ giá trị" }})"
+            failed.isNotEmpty() -> "Đã đặt ${target.label} cho nút nguồn; bỏ qua: ${failed.joinToString { it.removePrefix("assistant.") }}"
+            else -> "Đã đặt ${target.label} cho nút nguồn"
+        }
+        mutable.update { it.copy(operationInProgress = false, assistantGuard = status, assistantCandidates = AssistantGuard.candidates(app), message = message) }
     }
     fun setAssistantGuard(enabled: Boolean) = viewModelScope.launch {
         if (!container.executor.isAvailable() || state.value.uid != 2000) { mutable.update { it.copy(message = "Cần Shizuku để cấp hoặc thu hồi quyền") }; return@launch }
