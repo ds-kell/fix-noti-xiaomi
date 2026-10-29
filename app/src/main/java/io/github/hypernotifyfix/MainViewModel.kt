@@ -304,9 +304,21 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         mutable.update { it.copy(aurogonKeepAlive = AurogonKeepAlive.isEnabled(container.appContext), message = if (ok) null else "Không khởi động được dịch vụ Aurogon") }
     }
     fun applyAssistant(target: AssistantCandidate) = viewModelScope.launch {
-        if (!container.executor.isAvailable() || state.value.uid != 2000) { mutable.update { it.copy(message = "Cần Shizuku để đổi trợ lý") }; return@launch }
-        mutable.update { it.copy(operationInProgress = true, message = null) }
         val app = container.appContext
+        if (!container.executor.isAvailable() || state.value.uid != 2000) {
+            if (target.isXiaoAi || !AssistantGuard.isSetUp(app)) { mutable.update { it.copy(message = "Lần thiết lập đầu và khi đổi về Xiao AI cần Shizuku") }; return@launch }
+            // Without Shizuku the role can only move through the system picker; the guard then keeps it after reboots.
+            val popup = AssistantGuard.needsPopupPermission(app, target.packageName)
+            val opened = container.settings.assistantPicker(target.packageName.takeIf { popup })
+            if (opened && popup) AssistantGuard.markPopupHandled(app, target.packageName)
+            mutable.update { it.copy(message = when {
+                !opened -> "Không mở được cài đặt trợ lý của hệ thống; hãy bật Shizuku rồi thử lại"
+                popup -> "Trong “Quyền khác”, bật “Hiển thị cửa sổ bật lên khi chạy nền”, rồi Back và chọn ${target.label} ở “Digital assistant app”"
+                else -> "Chọn ${target.label} ở “Digital assistant app”"
+            }) }
+            return@launch
+        }
+        mutable.update { it.copy(operationInProgress = true, message = null) }
         val holders = AssistantSwitch.parseHolders(container.executor.execute(PrivilegedCommand("assistant.holders", listOf("cmd", "role", "get-role-holders", "android.app.role.ASSISTANT"))).stdout)
         val failed = AssistantSwitch.commands(target, holders, AssistantGuard.isInstalled(app, AssistantSwitch.XIAO_AI), app.packageName)
             .filterNot { container.executor.execute(it).successful }.map { it.id }
@@ -314,12 +326,13 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         if (AssistantGuard.isEnabled(app)) { AssistantGuard.watch(app); AssistantGuard.repair(app, "switch") }
         val status = AssistantGuard.status(app)
         val switched = status.assistant == target.service && status.service == target.service && failed.none { it in AssistantSwitch.REQUIRED }
+        if (switched && !target.isXiaoAi) AssistantGuard.markSetUp(app, target.packageName)
         val message = when {
             !switched -> "Chưa đổi được sang ${target.label} (lỗi: ${failed.joinToString { it.removePrefix("assistant.") }.ifBlank { "hệ thống không giữ giá trị" }})"
             failed.isNotEmpty() -> "Đã đặt ${target.label} cho nút nguồn; bỏ qua: ${failed.joinToString { it.removePrefix("assistant.") }}"
             else -> "Đã đặt ${target.label} cho nút nguồn"
         }
-        mutable.update { it.copy(operationInProgress = false, assistantGuard = status, assistantCandidates = AssistantGuard.candidates(app), message = message) }
+        mutable.update { it.copy(operationInProgress = false, assistantGuard = AssistantGuard.status(app), assistantCandidates = AssistantGuard.candidates(app), message = message) }
     }
     fun setAssistantGuard(enabled: Boolean) = viewModelScope.launch {
         if (!container.executor.isAvailable() || state.value.uid != 2000) { mutable.update { it.copy(message = "Cần Shizuku để cấp hoặc thu hồi quyền") }; return@launch }

@@ -693,7 +693,10 @@ private fun AssistantGuardCard(state: UiState, vm: MainViewModel) = ElevatedCard
                 else "Áp dụng sẽ cấp micro và quyền mở cửa sổ khi chạy nền cho ${target.label}, đặt làm trợ lý, đổi hành động giữ nút nguồn, tắt Xiao AI (chọn lại Xiao AI để khôi phục) và bật tự giữ bên dưới.",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Button({ vm.applyAssistant(target) }, Modifier.fillMaxWidth(), enabled = canRun) { Text(if (target.packageName == current) "Áp dụng lại ${target.label}" else "Áp dụng ${target.label}") }
+            // Without Shizuku, switching between already-set-up assistants goes through the system picker.
+            val viaSystem = state.uid != 2000 && guard?.setUp == true && !target.isXiaoAi
+            Button({ vm.applyAssistant(target) }, Modifier.fillMaxWidth(), enabled = !state.operationInProgress && (state.uid == 2000 || viaSystem)) { Text(if (target.packageName == current) "Áp dụng lại ${target.label}" else "Áp dụng ${target.label}") }
+            if (viaSystem) Text("Shizuku đang tắt: Áp dụng sẽ mở Cài đặt để chọn ${target.label} ở “Digital assistant app” (kèm trang quyền cửa sổ nền nếu cần).", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         HorizontalDivider()
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -708,7 +711,7 @@ private fun AssistantGuardCard(state: UiState, vm: MainViewModel) = ElevatedCard
             Detail("Tự sửa lần gần nhất", formatTime(guard.lastRun))
             guard.lastResult?.let { Text("Lần gần nhất: $it", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        if (state.uid != 2000) Text("Áp dụng và bật/tắt cần Shizuku. Sau đó phần tự giữ chạy không cần Shizuku.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (state.uid != 2000 && guard?.setUp != true) Text("Lần áp dụng đầu tiên cần Shizuku. Sau đó đổi giữa các AI và phần tự giữ không cần Shizuku (trừ khi đổi về Xiao AI).", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

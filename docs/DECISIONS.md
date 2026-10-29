@@ -42,6 +42,10 @@ The guard restores `voice_interaction_service` from `assistant`, only when they 
 
 The assistant picker (0.10.0) lists every app declaring a `VoiceInteractionService` (Google/Gemini, Claude, ChatGPT…, plus Xiao AI even after `pm uninstall --user 0`) and "Áp dụng" runs, through Shizuku, the community Gemini `.bat` generalised to any assistant: remove Xiao AI (first — removing it after the role change made the system clear `assistant`), grant RECORD_AUDIO, move `android.app.role.ASSISTANT`, set `voice_interaction_service`/`assistant`/`voice_recognition_service`, set HyperOS `system long_press_power_key=launch_google_search` (opens whichever assistant is set; the `.bat`'s `global power_button_long_press=5` alone is ignored on HyperOS 3) and grant the guard's permission. Choosing Xiao AI reverses it with `install-existing` and `launch_voice_assistant`. Only the role, service and power-key steps are required; the rest are best effort and reported.
 
+Claude and ChatGPT were reached by the power key but HyperOS refused their assistant overlay ("MIUILOG- Permission Denied Activity") until Xiaomi op 10021 ("open new windows while running in the background", 10020 on the lock screen) was allowed; the Google app is pre-allowed. "Áp dụng" grants both.
+
+Without Shizuku (0.10.3), switching between assistants after one Shizuku setup goes through the system: writing `assistant`/`voice_interaction_service` alone works immediately but the system resets `assistant` to the role holder on boot (observed), so the role must move. `ACTION_MANAGE_DEFAULT_APP` needs MANAGE_ROLE_HOLDERS; the app opens the public `ACTION_VOICE_INPUT_SETTINGS` ("Digital assistant app" row) instead, with Xiaomi's `miui.intent.action.APP_PERM_EDITOR` on top the first time a non-Google assistant is chosen. Xiao AI still needs Shizuku (it is uninstalled for the user and must be `install-existing`).
+
 ## Sources reviewed
 
 - Official Shizuku API repository and changelog: https://github.com/RikkaApps/Shizuku-API

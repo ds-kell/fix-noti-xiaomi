@@ -37,7 +37,7 @@ object AssistantGuard {
     internal const val WATCH_JOB_ID = 4110
     internal const val UNLOCK_JOB_ID = 4111
 
-    data class Status(val enabled: Boolean, val assistant: String?, val service: String?, val lastResult: String?, val lastRun: Long) {
+    data class Status(val enabled: Boolean, val assistant: String?, val service: String?, val lastResult: String?, val lastRun: Long, val setUp: Boolean) {
         val healthy get() = assistant != null && assistant == service
     }
 
@@ -45,8 +45,22 @@ object AssistantGuard {
     fun isEnabled(context: Context) = context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
 
     fun status(context: Context) = prefs(context).let {
-        Status(isEnabled(context), read(context, KEY_ASSISTANT), read(context, KEY_SERVICE), it.getString("last_result", null), it.getLong("last_run", 0L))
+        Status(isEnabled(context), read(context, KEY_ASSISTANT), read(context, KEY_SERVICE), it.getString("last_result", null), it.getLong("last_run", 0L), isSetUp(context))
     }
+
+    /**
+     * After one Shizuku switch the power key, Xiao AI removal and the guard are in place, so switching
+     * between non-Xiao assistants only needs the system "Digital assistant app" picker (the role must
+     * move: on boot the system resets `assistant` to the role holder) plus Xiaomi's pop-up permission.
+     */
+    fun isSetUp(context: Context) = prefs(context).getBoolean("set_up", false) && isEnabled(context)
+    fun markSetUp(context: Context, packageName: String) = prefs(context).edit().putBoolean("set_up", true).putStringSet("popup_handled", popupHandled(context) + packageName).apply()
+
+    /** Packages whose Xiaomi pop-up permission was granted via Shizuku or whose editor was already opened. */
+    fun popupHandled(context: Context): Set<String> = prefs(context).getStringSet("popup_handled", emptySet()).orEmpty()
+    fun markPopupHandled(context: Context, packageName: String) = prefs(context).edit().putStringSet("popup_handled", popupHandled(context) + packageName).apply()
+    /** The Google app is pre-allowed by HyperOS; Claude, ChatGPT and others were blocked without it. */
+    fun needsPopupPermission(context: Context, packageName: String) = packageName != GOOGLE && packageName != AssistantSwitch.XIAO_AI && packageName !in popupHandled(context)
 
     fun onBoot(context: Context, action: String?) {
         if (!isEnabled(context)) return
