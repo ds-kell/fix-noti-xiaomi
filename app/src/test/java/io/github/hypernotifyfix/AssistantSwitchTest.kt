@@ -28,6 +28,20 @@ class AssistantSwitchTest {
         assertFalse(commands.any { it.id == "assistant.remove_xiaoai" })
     }
 
+    @Test fun `non-Google assistants may open their overlay from the background`() {
+        val commands = AssistantSwitch.commands(claude, emptySet(), xiaoAiInstalled = false, selfPackage = "x.y")
+        assertEquals(listOf("cmd", "appops", "set", claude.packageName, "10021", "allow"), commands.single { it.id == "assistant.allow_background_popup" }.arguments)
+        assertFalse(AssistantSwitch.commands(xiaoAi, emptySet(), xiaoAiInstalled = false, selfPackage = "x.y").any { it.id == "assistant.allow_background_popup" })
+    }
+
+    @Test fun `package reset removes whitelists and restores default app ops`() {
+        val commands = io.github.hypernotifyfix.domain.PackageReset.commands("com.zing.zalo", mapOf("MILLET_NO_RESTRICT_APP" to "com.a.app, com.zing.zalo", "millet_white" to "com.a.app"))
+        assertEquals(listOf("cmd", "deviceidle", "whitelist", "-com.zing.zalo"), commands.first().arguments)
+        assertEquals(listOf("settings", "put", "system", "MILLET_NO_RESTRICT_APP", "com.a.app"), commands.single { it.id == "reset.millet_millet_no_restrict_app" }.arguments)
+        assertFalse(commands.any { it.id == "reset.millet_millet_white" })
+        assertEquals("default", commands.single { it.id == "reset.appops_run_any_in_background" }.arguments.last())
+    }
+
     @Test fun `current holder is not removed and assistant without recognizer skips it`() {
         val steps = ids(AssistantSwitch.commands(claude, setOf(claude.packageName), xiaoAiInstalled = false, selfPackage = "x.y"))
         assertFalse("role_remove" in steps)

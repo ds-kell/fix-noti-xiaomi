@@ -23,4 +23,10 @@ object XiaomiWhitelist {
         val core = if (hasTrailingDelimiter) withoutWhitespace.dropLast(parsed.delimiter.length) else withoutWhitespace
         return core + parsed.delimiter + packageName + (if (hasTrailingDelimiter) parsed.delimiter else "") + trailingWhitespace
     }
+    /** Drops one package, keeping the list's delimiter; unchanged when absent, null when the format is unsafe. */
+    fun remove(raw: String, packageName: String): String? {
+        val parsed = parse(raw) ?: return null
+        if (parsed.tokens.none { it == packageName }) return raw
+        return parsed.tokens.filter { it != packageName }.joinToString(parsed.delimiter)
+    }
 }

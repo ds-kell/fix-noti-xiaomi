@@ -24,6 +24,12 @@ object AssistantSwitch {
         // Before the role change: removing Xiao AI afterwards made the system clear `assistant` as well.
         else if (xiaoAiInstalled) cmd("remove_xiaoai", "pm", "uninstall", "-k", "--user", "0", XIAO_AI)
         cmd("grant_mic", "pm", "grant", target.packageName, "android.permission.RECORD_AUDIO")
+        // HyperOS blocks a background app from opening its assistant overlay ("Permission Denied Activity")
+        // unless Xiaomi's "open new windows while running in the background" op is allowed; 10020 covers the lock screen.
+        if (!target.isXiaoAi) {
+            cmd("allow_background_popup", "cmd", "appops", "set", target.packageName, "10021", "allow")
+            cmd("allow_lockscreen_popup", "cmd", "appops", "set", target.packageName, "10020", "allow")
+        }
         (currentHolders - target.packageName).forEach { cmd("role_remove", "cmd", "role", "remove-role-holder", ROLE, it) }
         cmd("role_add", "cmd", "role", "add-role-holder", ROLE, target.packageName)
         cmd("set_service", "settings", "put", "secure", "voice_interaction_service", target.service)

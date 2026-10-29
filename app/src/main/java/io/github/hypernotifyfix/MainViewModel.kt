@@ -17,12 +17,14 @@ import io.github.hypernotifyfix.core.model.*
 import io.github.hypernotifyfix.domain.AssistantCandidate
 import io.github.hypernotifyfix.domain.AssistantSwitch
 import io.github.hypernotifyfix.domain.OperationTransaction
+import io.github.hypernotifyfix.domain.PackageReset
 import io.github.hypernotifyfix.domain.StandbyBucketParser
 import io.github.hypernotifyfix.domain.XiaomiWhitelist
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
@@ -77,7 +79,17 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     private val binderDead = Shizuku.OnBinderDeadListener { mutable.update { it.copy(shizuku = "Shizuku đã dừng hoặc mất kết nối", uid = null) } }
     private val permission = Shizuku.OnRequestPermissionResultListener { _, result -> mutable.update { it.copy(shizuku = if (result == PackageManager.PERMISSION_GRANTED) "Đã cấp quyền" else "Đã từ chối quyền") }; refresh() }
 
-    init { Shizuku.addBinderReceivedListenerSticky(binderReceived); Shizuku.addBinderDeadListener(binderDead); Shizuku.addRequestPermissionResultListener(permission); refresh() }
+    // Advanced options used to live only in UiState and reset to off whenever the process restarted.
+    private val options = container.appContext.getSharedPreferences("ui_options", android.content.Context.MODE_PRIVATE)
+
+    init {
+        mutable.update { it.copy(advanced = options.getBoolean("advanced", false), experimental = options.getBoolean("experimental", false), xiaomiAutostartOps = options.getBoolean("xiaomiAutostartOps", false), networkWhitelist = options.getBoolean("networkWhitelist", false), aggressiveAppOps = options.getBoolean("aggressiveAppOps", false), aggressiveSystemProfile = options.getBoolean("aggressiveSystemProfile", false), greezerGmsLimit = options.getBoolean("greezerGmsLimit", false)) }
+        Shizuku.addBinderReceivedListenerSticky(binderReceived); Shizuku.addBinderDeadListener(binderDead); Shizuku.addRequestPermissionResultListener(permission); refresh()
+    }
+    private fun updateOptions(change: (UiState) -> UiState) {
+        val s = mutable.updateAndGet(change)
+        options.edit().putBoolean("advanced", s.advanced).putBoolean("experimental", s.experimental).putBoolean("xiaomiAutostartOps", s.xiaomiAutostartOps).putBoolean("networkWhitelist", s.networkWhitelist).putBoolean("aggressiveAppOps", s.aggressiveAppOps).putBoolean("aggressiveSystemProfile", s.aggressiveSystemProfile).putBoolean("greezerGmsLimit", s.greezerGmsLimit).apply()
+    }
     fun refresh() = viewModelScope.launch {
         val alive = container.executor.binderAlive(); val granted = container.executor.permissionGranted()
         val status = when { !alive -> "Chưa chạy — hãy khởi động Shizuku sau khi bật máy"; !granted -> "Cần cấp quyền"; else -> "Đã kết nối" }
@@ -108,14 +120,21 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         container.maintenance.setPackages(selected + support)
         it.copy(selected = selected, maintenancePackages = (selected + support).size, diagnosticScope = emptySet(), plans = emptyList(), results = emptyList(), diagnosticCompleted = false)
     }
-    fun setDryRun(value: Boolean) = mutable.update { it.copy(dryRun = value) }
-    fun setAdvanced(value: Boolean) = mutable.update { it.copy(advanced = value, greezerGmsLimit = if (value) it.greezerGmsLimit else false, experimental = if (value) it.experimental else false, xiaomiAutostartOps = if (value) it.xiaomiAutostartOps else false, networkWhitelist = if (value) it.networkWhitelist else false, aggressiveAppOps = if (value) it.aggressiveAppOps else false, aggressiveSystemProfile = if (value) it.aggressiveSystemProfile else false) }
-    fun setExperimental(value: Boolean) = mutable.update { it.copy(experimental = value && it.advanced) }
-    fun setXiaomiAutostartOps(value: Boolean) = mutable.update { it.copy(xiaomiAutostartOps = value && it.advanced) }
-    fun setNetworkWhitelist(value: Boolean) = mutable.update { it.copy(networkWhitelist = value && it.advanced) }
-    fun setAggressiveAppOps(value: Boolean) = mutable.update { it.copy(aggressiveAppOps = value && it.advanced) }
-    fun setAggressiveSystemProfile(value: Boolean) = mutable.update { it.copy(aggressiveSystemProfile = value && it.advanced) }
-    fun setGreezerGmsLimit(value: Boolean) = mutable.update { it.copy(greezerGmsLimit = value && it.advanced) }
+    /** Re-selects optimised apps that lost their selection, so the MILLET helper protects them again after reboots. */
+    fun selectAll(packages: Set<String>) = mutable.update {
+        val selected = it.selected + packages
+        val support = setOf("com.google.android.gms", "com.google.android.gsf").filter(container.catalog::isInstalled)
+        container.maintenance.setPackages(selected + support)
+        it.copy(selected = selected, maintenancePackages = (selected + support).size, message = "Đã chọn lại ${packages.size} app; HyperNotify sẽ tự bảo vệ chúng sau khi khởi động lại")
+    }
+    fun setDryRun(value: Boolean) =mutable.update { it.copy(dryRun = value) }
+    fun setAdvanced(value: Boolean) = updateOptions { it.copy(advanced = value, greezerGmsLimit = if (value) it.greezerGmsLimit else false, experimental = if (value) it.experimental else false, xiaomiAutostartOps = if (value) it.xiaomiAutostartOps else false, networkWhitelist = if (value) it.networkWhitelist else false, aggressiveAppOps = if (value) it.aggressiveAppOps else false, aggressiveSystemProfile = if (value) it.aggressiveSystemProfile else false) }
+    fun setExperimental(value: Boolean) = updateOptions { it.copy(experimental = value && it.advanced) }
+    fun setXiaomiAutostartOps(value: Boolean) = updateOptions { it.copy(xiaomiAutostartOps = value && it.advanced) }
+    fun setNetworkWhitelist(value: Boolean) = updateOptions { it.copy(networkWhitelist = value && it.advanced) }
+    fun setAggressiveAppOps(value: Boolean) = updateOptions { it.copy(aggressiveAppOps = value && it.advanced) }
+    fun setAggressiveSystemProfile(value: Boolean) = updateOptions { it.copy(aggressiveSystemProfile = value && it.advanced) }
+    fun setGreezerGmsLimit(value: Boolean) = updateOptions { it.copy(greezerGmsLimit = value && it.advanced) }
     fun clearMessage() = mutable.update { it.copy(message = null) }
     fun diagnose() = viewModelScope.launch {
         if (!container.executor.isAvailable() || state.value.uid != 2000) { mutable.update { it.copy(message = "Cần Shizuku với quyền shell UID 2000") }; return@launch }
@@ -211,7 +230,26 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             container.maintenance.setPackages(container.maintenance.packages() - packageName + support)
             container.registry.markRestored(setOf(packageName))
         }
-        mutable.update { it.copy(operationInProgress = false, results = results, optimizedPackages = container.registry.packages(), alreadyOptimalPackages = container.registry.alreadyOptimal(), message = if (success) "Đã hoàn tác tối ưu cho $packageName" else "Có mục không thể hoàn tác; xem phần Kết quả") }
+        mutable.update { it.copy(operationInProgress = false, results = results, selected = if (success) it.selected - packageName else it.selected, optimizedPackages = container.registry.packages(), alreadyOptimalPackages = container.registry.alreadyOptimal(), message = if (success) "Đã hoàn tác tối ưu cho $packageName" else "Có mục không thể hoàn tác; xem phần Kết quả") }
+    }
+    /** "Khôi phục" in the optimised list: the exact backup when one exists, otherwise Android defaults. */
+    fun restorePackage(packageName: String) {
+        if (packageName in container.registry.packages()) { revokePackage(packageName); return }
+        viewModelScope.launch {
+            if (!container.executor.isAvailable() || state.value.uid != 2000) { mutable.update { it.copy(message = "Cần Shizuku để khôi phục") }; return@launch }
+            mutable.update { it.copy(operationInProgress = true, message = null) }
+            // Stop protecting it first, or the MILLET helper's watcher would add it straight back.
+            container.maintenance.setPackages(container.maintenance.packages() - packageName)
+            withContext(Dispatchers.IO) { container.maintenance.reapply("reset") }
+            val millet = PackageReset.MILLET_KEYS.mapNotNull { key ->
+                val result = container.executor.execute(PrivilegedCommand("reset.read_${key.lowercase()}", listOf("settings", "get", "system", key)))
+                result.stdout.trim().takeIf { result.successful && it != "null" }?.let { key to it }
+            }.toMap()
+            val failed = PackageReset.commands(packageName, millet).filterNot { container.executor.execute(it).successful }.map { it.id.removePrefix("reset.") }
+            container.registry.markRestored(setOf(packageName))
+            mutable.update { it.copy(operationInProgress = false, selected = it.selected - packageName, maintenancePackages = container.maintenance.packages().size, optimizedPackages = container.registry.packages(), alreadyOptimalPackages = container.registry.alreadyOptimal(),
+                message = if (failed.isEmpty()) "Đã đưa $packageName về mặc định Android" else "Đã đưa $packageName về mặc định; bỏ qua: ${failed.joinToString()}") }
+        }
     }
     fun restoreAll() = viewModelScope.launch {
         if (!container.executor.isAvailable() || state.value.uid != 2000) { mutable.update { it.copy(message = "Cần Shizuku để khôi phục toàn bộ") }; return@launch }
@@ -297,6 +335,6 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     }
     fun requestBatteryExemption() =SetupState.requestBatteryExemption(container.appContext)
     fun openAutostart() = container.settings.xiaomiAutostart(container.appContext.packageName)
-    fun refreshSetupState() = mutable.update { it.copy(autostart = SetupState.autostart(container.appContext), batteryExempt = SetupState.batteryExempt(container.appContext), maintenanceCanWrite = container.maintenance.canWrite()) }
+    fun refreshSetupState() = mutable.update { it.copy(autostart = SetupState.autostart(container.appContext), batteryExempt = SetupState.batteryExempt(container.appContext), maintenanceCanWrite = container.maintenance.canWrite(), assistantGuard = AssistantGuard.status(container.appContext), assistantCandidates = AssistantGuard.candidates(container.appContext)) }
     override fun onCleared() { Shizuku.removeBinderReceivedListener(binderReceived); Shizuku.removeBinderDeadListener(binderDead); Shizuku.removeRequestPermissionResultListener(permission) }
 }

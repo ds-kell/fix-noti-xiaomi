@@ -150,7 +150,7 @@ private fun HyperNotifyApp(vm: MainViewModel, container: AppContainer) {
         Box(Modifier.padding(padding).fillMaxSize()) {
             if (showGuide) GuideScreen(state) { target -> tab = target; showGuide = false } else when (tab) {
                 0 -> HomeScreen(state, vm, onSelectApps = { tab = 1 }, onOpenGuide = { showGuide = true })
-                1 -> AppsScreen(state, query, { query = it }, vm::select, vm::revokePackage, vm::restoreAll, container.catalog::icon)
+                1 -> AppsScreen(state, query, { query = it }, vm::select, vm::selectAll, vm::restorePackage, vm::restoreAll, container.catalog::icon)
                 2 -> PreviewScreen(state, vm)
                 3 -> HistoryScreen(state, vm::restore)
                 else -> {
@@ -312,9 +312,10 @@ private fun ScreenHeader(title: String, subtitle: String) = Column(Modifier.padd
 }
 
 @Composable
-private fun AppsScreen(state: UiState, query: String, onQuery: (String) -> Unit, select: (String) -> Unit, revoke: (String) -> Unit, restoreAll: () -> Unit, iconFor: (String) -> Drawable?) = Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
+private fun AppsScreen(state: UiState, query: String, onQuery: (String) -> Unit, select: (String) -> Unit, selectAll: (Set<String>) -> Unit, restore: (String) -> Unit, restoreAll: () -> Unit, iconFor: (String) -> Drawable?) = Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
     var filter by rememberSaveable { mutableStateOf("all") }
     var confirmRestoreAll by rememberSaveable { mutableStateOf(false) }
+    var confirmRestore by rememberSaveable { mutableStateOf<String?>(null) }
     ScreenHeader("Ứng dụng", "Chọn ứng dụng cần xử lý hoặc xem lại những ứng dụng đã tối ưu.")
     AppSearchField(query, onQuery)
     Spacer(Modifier.height(8.dp))
@@ -323,6 +324,14 @@ private fun AppsScreen(state: UiState, query: String, onQuery: (String) -> Unit,
         FilterChip(filter == "all", { filter = "all" }, { Text("Tất cả (${state.apps.size})", maxLines = 1) })
         FilterChip(filter == "selected", { filter = "selected" }, { Text("Đã chọn (${state.selected.size})", maxLines = 1) })
         FilterChip(filter == "optimized", { filter = "optimized" }, { Text("Đã tối ưu (${state.allOptimized.size})", maxLines = 1) })
+    }
+    // Optimised apps that are not selected are no longer re-protected by the MILLET helper after a reboot.
+    val unselectedOptimized = state.allOptimized - state.selected - setOf("com.google.android.gms", "com.google.android.gsf")
+    if (filter == "optimized" && unselectedOptimized.isNotEmpty()) {
+        Button(onClick = { selectAll(unselectedOptimized) }, enabled = !state.operationInProgress, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Outlined.CheckCircle, null); Spacer(Modifier.width(8.dp)); Text("Chọn lại ${unselectedOptimized.size} app đã tối ưu")
+        }
+        Text("Các app này đang tối ưu nhưng chưa được chọn, nên sẽ không được tự bảo vệ sau khi khởi động lại.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     if (filter == "optimized" && state.optimizedPackages.isNotEmpty()) {
         OutlinedButton(onClick = { confirmRestoreAll = true }, enabled = !state.operationInProgress, modifier = Modifier.fillMaxWidth()) {
@@ -339,10 +348,19 @@ private fun AppsScreen(state: UiState, query: String, onQuery: (String) -> Unit,
     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         items(visibleApps, key = { it.packageName }) { app ->
             Surface(color = if (app.packageName in state.selected) Indigo.copy(alpha = .07f) else Color.White, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, if (app.packageName in state.allOptimized) Mint.copy(alpha = .35f) else MaterialTheme.colorScheme.outlineVariant)) {
-                ListItem(headlineContent = { Text(app.label, fontWeight = FontWeight.Medium) }, supportingContent = { Column { Text(app.packageName, maxLines = 1, overflow = TextOverflow.Ellipsis); if (app.packageName in state.optimizedPackages) Text("Đã tối ưu • có thể hoàn tác", color = Mint, style = MaterialTheme.typography.labelSmall) else if (app.packageName in state.alreadyOptimalPackages) Text("Đã tối ưu sẵn • không có bản sao lưu để hoàn tác", color = Mint, style = MaterialTheme.typography.labelSmall) else Text("Chưa có bản tối ưu đã xác minh", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall) } }, leadingContent = { InstalledAppIcon(app.packageName, iconFor) }, trailingContent = { Row(verticalAlignment = Alignment.CenterVertically) { if (app.packageName in state.optimizedPackages) IconButton(onClick = { revoke(app.packageName) }, enabled = !state.operationInProgress) { Icon(Icons.Outlined.Restore, "Hoàn tác tối ưu", tint = Amber) }; Checkbox(app.packageName in state.selected, { select(app.packageName) }) } }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
+                ListItem(headlineContent = { Text(app.label, fontWeight = FontWeight.Medium) }, supportingContent = { Column { Text(app.packageName, maxLines = 1, overflow = TextOverflow.Ellipsis); if (app.packageName in state.optimizedPackages) Text("Đã tối ưu • có thể hoàn tác", color = Mint, style = MaterialTheme.typography.labelSmall) else if (app.packageName in state.alreadyOptimalPackages) Text("Đã tối ưu sẵn • khôi phục sẽ đưa về mặc định Android", color = Mint, style = MaterialTheme.typography.labelSmall) else Text("Chưa có bản tối ưu đã xác minh", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall) } }, leadingContent = { InstalledAppIcon(app.packageName, iconFor) },
+                    // The optimised list restores apps; selecting happens in the other two lists.
+                    trailingContent = { if (filter == "optimized") TextButton(onClick = { confirmRestore = app.packageName }, enabled = !state.operationInProgress) { Icon(Icons.Outlined.Restore, null, tint = Amber); Spacer(Modifier.width(4.dp)); Text("Khôi phục", color = Amber) } else Checkbox(app.packageName in state.selected, { select(app.packageName) }) }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
             }
         }
         if (visibleApps.isEmpty()) item { EmptyState(Icons.Outlined.FilterAltOff, "Không có ứng dụng", if (filter == "optimized") "Chưa có ứng dụng nào được tối ưu và xác minh." else "Thử đổi bộ lọc hoặc từ khóa tìm kiếm.") }
+    }
+    confirmRestore?.let { pkg ->
+        val label = state.apps.firstOrNull { it.packageName == pkg }?.label ?: pkg
+        val backedUp = pkg in state.optimizedPackages
+        AlertDialog(onDismissRequest = { confirmRestore = null }, icon = { Icon(Icons.Outlined.Restore, null, tint = Amber) }, title = { Text("Khôi phục $label?") },
+            text = { Text(if (backedUp) "Trả $label về đúng trạng thái đã sao lưu trước khi tối ưu và bỏ chọn app. Cần Shizuku." else "$label không có bản sao lưu (được tối ưu từ lần cài trước). App sẽ được đưa về mặc định Android: bỏ khỏi whitelist Doze và MILLET, chạy nền về mặc định, và bỏ chọn. Cần Shizuku.") },
+            confirmButton = { Button(onClick = { confirmRestore = null; restore(pkg) }) { Text("Khôi phục") } }, dismissButton = { TextButton(onClick = { confirmRestore = null }) { Text("Hủy") } })
     }
     if (confirmRestoreAll) {
         AlertDialog(onDismissRequest = { confirmRestoreAll = false }, icon = { Icon(Icons.Outlined.Restore, null, tint = Amber) }, title = { Text("Khôi phục toàn bộ?") }, text = { Text("HyperNotify sẽ dùng các bản sao lưu để trả mọi ứng dụng đã tối ưu về đúng trạng thái ban đầu. Thao tác này cần Shizuku đang kết nối.") }, confirmButton = { Button(onClick = { confirmRestoreAll = false; restoreAll() }) { Text("Khôi phục tất cả") } }, dismissButton = { TextButton(onClick = { confirmRestoreAll = false }) { Text("Hủy") } })
@@ -672,7 +690,7 @@ private fun AssistantGuardCard(state: UiState, vm: MainViewModel) = ElevatedCard
         if (target != null) {
             Text(
                 if (target.isXiaoAi) "Áp dụng sẽ cài lại Xiao AI và trả nút nguồn về mặc định Xiaomi."
-                else "Áp dụng sẽ cấp micro cho ${target.label}, đặt làm trợ lý, đổi hành động giữ nút nguồn, tắt Xiao AI (chọn lại Xiao AI để khôi phục) và bật tự giữ bên dưới.",
+                else "Áp dụng sẽ cấp micro và quyền mở cửa sổ khi chạy nền cho ${target.label}, đặt làm trợ lý, đổi hành động giữ nút nguồn, tắt Xiao AI (chọn lại Xiao AI để khôi phục) và bật tự giữ bên dưới.",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Button({ vm.applyAssistant(target) }, Modifier.fillMaxWidth(), enabled = canRun) { Text(if (target.packageName == current) "Áp dụng lại ${target.label}" else "Áp dụng ${target.label}") }
