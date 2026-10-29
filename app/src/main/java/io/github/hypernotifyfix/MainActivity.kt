@@ -176,7 +176,7 @@ private fun HomeScreen(state: UiState, vm: MainViewModel, onSelectApps: () -> Un
             Text("Tìm và gỡ các giới hạn khiến ứng dụng nhận thông báo chậm hoặc bị mất.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
-    if (state.optimizedPackages.isEmpty()) item {
+    if (state.allOptimized.isEmpty()) item {
         Surface(onClick = onOpenGuide, color = Indigo.copy(alpha = .07f), shape = RoundedCornerShape(16.dp)) {
             Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Icon(Icons.AutoMirrored.Outlined.MenuBook, null, tint = Indigo)
@@ -194,7 +194,7 @@ private fun HomeScreen(state: UiState, vm: MainViewModel, onSelectApps: () -> Un
     item {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             MetricCard("Đã chọn", state.selected.size.toString(), Icons.Outlined.CheckCircle, Indigo, Modifier.weight(1f))
-            MetricCard("Đã tối ưu", state.optimizedPackages.size.toString(), Icons.Outlined.Bolt, Mint, Modifier.weight(1f))
+            MetricCard("Đã tối ưu", state.allOptimized.size.toString(), Icons.Outlined.Bolt, Mint, Modifier.weight(1f))
         }
     }
     item {
@@ -321,7 +321,7 @@ private fun AppsScreen(state: UiState, query: String, onQuery: (String) -> Unit,
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         FilterChip(filter == "all", { filter = "all" }, { Text("Tất cả (${state.apps.size})", maxLines = 1) })
         FilterChip(filter == "selected", { filter = "selected" }, { Text("Đã chọn (${state.selected.size})", maxLines = 1) })
-        FilterChip(filter == "optimized", { filter = "optimized" }, { Text("Đã tối ưu (${state.optimizedPackages.size})", maxLines = 1) })
+        FilterChip(filter == "optimized", { filter = "optimized" }, { Text("Đã tối ưu (${state.allOptimized.size})", maxLines = 1) })
     }
     if (filter == "optimized" && state.optimizedPackages.isNotEmpty()) {
         OutlinedButton(onClick = { confirmRestoreAll = true }, enabled = !state.operationInProgress, modifier = Modifier.fillMaxWidth()) {
@@ -331,14 +331,14 @@ private fun AppsScreen(state: UiState, query: String, onQuery: (String) -> Unit,
     val visibleApps = state.apps.filter { app ->
         (query.isBlank() || app.label.contains(query, true) || app.packageName.contains(query, true)) && when (filter) {
             "selected" -> app.packageName in state.selected
-            "optimized" -> app.packageName in state.optimizedPackages
+            "optimized" -> app.packageName in state.allOptimized
             else -> true
         }
     }
     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         items(visibleApps, key = { it.packageName }) { app ->
-            Surface(color = if (app.packageName in state.selected) Indigo.copy(alpha = .07f) else Color.White, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, if (app.packageName in state.optimizedPackages) Mint.copy(alpha = .35f) else MaterialTheme.colorScheme.outlineVariant)) {
-                ListItem(headlineContent = { Text(app.label, fontWeight = FontWeight.Medium) }, supportingContent = { Column { Text(app.packageName, maxLines = 1, overflow = TextOverflow.Ellipsis); if (app.packageName in state.optimizedPackages) Text("Đã tối ưu • có thể hoàn tác", color = Mint, style = MaterialTheme.typography.labelSmall) else Text("Chưa có bản tối ưu đã xác minh", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall) } }, leadingContent = { InstalledAppIcon(app.packageName, iconFor) }, trailingContent = { Row(verticalAlignment = Alignment.CenterVertically) { if (app.packageName in state.optimizedPackages) IconButton(onClick = { revoke(app.packageName) }, enabled = !state.operationInProgress) { Icon(Icons.Outlined.Restore, "Hoàn tác tối ưu", tint = Amber) }; Checkbox(app.packageName in state.selected, { select(app.packageName) }) } }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
+            Surface(color = if (app.packageName in state.selected) Indigo.copy(alpha = .07f) else Color.White, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, if (app.packageName in state.allOptimized) Mint.copy(alpha = .35f) else MaterialTheme.colorScheme.outlineVariant)) {
+                ListItem(headlineContent = { Text(app.label, fontWeight = FontWeight.Medium) }, supportingContent = { Column { Text(app.packageName, maxLines = 1, overflow = TextOverflow.Ellipsis); if (app.packageName in state.optimizedPackages) Text("Đã tối ưu • có thể hoàn tác", color = Mint, style = MaterialTheme.typography.labelSmall) else if (app.packageName in state.alreadyOptimalPackages) Text("Đã tối ưu sẵn • không có bản sao lưu để hoàn tác", color = Mint, style = MaterialTheme.typography.labelSmall) else Text("Chưa có bản tối ưu đã xác minh", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall) } }, leadingContent = { InstalledAppIcon(app.packageName, iconFor) }, trailingContent = { Row(verticalAlignment = Alignment.CenterVertically) { if (app.packageName in state.optimizedPackages) IconButton(onClick = { revoke(app.packageName) }, enabled = !state.operationInProgress) { Icon(Icons.Outlined.Restore, "Hoàn tác tối ưu", tint = Amber) }; Checkbox(app.packageName in state.selected, { select(app.packageName) }) } }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
             }
         }
         if (visibleApps.isEmpty()) item { EmptyState(Icons.Outlined.FilterAltOff, "Không có ứng dụng", if (filter == "optimized") "Chưa có ứng dụng nào được tối ưu và xác minh." else "Thử đổi bộ lọc hoặc từ khóa tìm kiếm.") }

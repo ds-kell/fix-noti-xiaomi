@@ -60,8 +60,12 @@ data class UiState(
     val maintenancePackages: Int = 0,
     val maintenanceStatus: String? = null,
     val optimizedPackages: Set<String> = emptySet(),
+    val alreadyOptimalPackages: Set<String> = emptySet(),
     val message: String? = null
-)
+) {
+    /** Restorable (backed up) plus already-optimal packages: what the user sees as "Đã tối ưu". */
+    val allOptimized get() = optimizedPackages + alreadyOptimalPackages
+}
 
 class MainViewModel(private val container: AppContainer) : ViewModel() {
     private val mutable = MutableStateFlow(UiState())
@@ -91,7 +95,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             container.registry.replace(migrated)
         }
         val optimized = container.registry.packages()
-        mutable.update { it.copy(loading = false, shizuku = if (uid != null && uid != 2000) "$status (UID không mong đợi: $uid)" else status, uid = uid, device = device, apps = container.catalog.list(), selected = if (it.selected.isEmpty()) maintained - setOf("com.google.android.gms", "com.google.android.gsf") else it.selected, history = history, optimizedPackages = optimized, maintenanceCanWrite = container.maintenance.canWrite(), maintenancePackages = maintained.size, maintenanceStatus = container.maintenance.lastResult(), helperInstalled = helper.isInstalled(), helperNeedsUpdate = helper.needsUpdate(), helperStatus = helperStatus, aurogonKeepAlive = AurogonKeepAlive.isEnabled(container.appContext), assistantGuard = AssistantGuard.status(container.appContext), autostart =SetupState.autostart(container.appContext), batteryExempt = SetupState.batteryExempt(container.appContext)) }
+        mutable.update { it.copy(loading = false, shizuku = if (uid != null && uid != 2000) "$status (UID không mong đợi: $uid)" else status, uid = uid, device = device, apps = container.catalog.list(), selected = if (it.selected.isEmpty()) maintained - setOf("com.google.android.gms", "com.google.android.gsf") else it.selected, history = history, optimizedPackages = optimized, alreadyOptimalPackages = container.registry.alreadyOptimal(), maintenanceCanWrite = container.maintenance.canWrite(), maintenancePackages = maintained.size, maintenanceStatus = container.maintenance.lastResult(), helperInstalled = helper.isInstalled(), helperNeedsUpdate = helper.needsUpdate(), helperStatus = helperStatus, aurogonKeepAlive = AurogonKeepAlive.isEnabled(container.appContext), assistantGuard = AssistantGuard.status(container.appContext), autostart =SetupState.autostart(container.appContext), batteryExempt = SetupState.batteryExempt(container.appContext)) }
         if (state.value.fcm == null) checkFcm()
     }
     fun requestShizuku() = container.executor.requestPermission()
@@ -124,10 +128,12 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         }
         val safeIds = setOf("xiaomi_millet_no_restrict", "xiaomi_millet_white", "xiaomi_cloud_lowlatency", "doze_whitelist", "appops_run_any_in_background", "appops_run_in_background", "standby_bucket", "inactive_state")
         val selectedOperations = container.packageOperations.filter { it.id in safeIds || it.id in optionalIds }
+        val readable = mutableSetOf<String>()
         scope.forEach { pkg -> selectedOperations.forEach { op ->
             if (op.probe(container.operationContext, pkg) is CapabilityStatus.Supported) {
                 val snapshot = op.read(container.operationContext, pkg)
                 if (snapshot.value is SnapshotValue.Present) {
+                    readable += pkg
                     val desired = when (op.id) {
                         in setOf("xiaomi_millet_no_restrict", "xiaomi_millet_white", "xiaomi_cloud_lowlatency") -> "true"
                         "doze_whitelist" -> "true"
@@ -164,7 +170,10 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             val snapshot = op.read(container.operationContext, "__device__")
             if (snapshot.value is SnapshotValue.Present && snapshot.value.raw != "false") plans += op.plan(snapshot, "false")
         }
-        mutable.update { it.copy(diagnosticScope = scope, plans = plans, diagnosticCompleted = true, operationInProgress = false, message = if (plans.isEmpty()) "Đã kiểm tra cả ứng dụng và dịch vụ Google: chưa thấy giới hạn hệ thống có thể sửa an toàn." else "Đã tìm thấy ${plans.size} giới hạn trong ${scope.size} package. Chưa có thay đổi nào được áp dụng.") }
+        // Re-judge only the scanned packages: optimal now and not already tracked with a backup.
+        val alreadyOptimal = readable - plans.map { it.packageName }.toSet() - container.registry.packages()
+        container.registry.replaceAlreadyOptimal(container.registry.alreadyOptimal() - scope + alreadyOptimal)
+        mutable.update { it.copy(diagnosticScope = scope, plans = plans, alreadyOptimalPackages = container.registry.alreadyOptimal(), diagnosticCompleted = true, operationInProgress = false, message = if (plans.isEmpty()) "Đã kiểm tra cả ứng dụng và dịch vụ Google: chưa thấy giới hạn hệ thống có thể sửa an toàn." else "Đã tìm thấy ${plans.size} giới hạn trong ${scope.size} package. Chưa có thay đổi nào được áp dụng.") }
     }
     fun applyConfirmed() = viewModelScope.launch {
         mutable.update { it.copy(operationInProgress = true, message = null) }
@@ -199,7 +208,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             container.maintenance.setPackages(container.maintenance.packages() - packageName + support)
             container.registry.markRestored(setOf(packageName))
         }
-        mutable.update { it.copy(operationInProgress = false, results = results, optimizedPackages = if (success) it.optimizedPackages - packageName else it.optimizedPackages, message = if (success) "Đã hoàn tác tối ưu cho $packageName" else "Có mục không thể hoàn tác; xem phần Kết quả") }
+        mutable.update { it.copy(operationInProgress = false, results = results, optimizedPackages = container.registry.packages(), alreadyOptimalPackages = container.registry.alreadyOptimal(), message = if (success) "Đã hoàn tác tối ưu cho $packageName" else "Có mục không thể hoàn tác; xem phần Kết quả") }
     }
     fun restoreAll() = viewModelScope.launch {
         if (!container.executor.isAvailable() || state.value.uid != 2000) { mutable.update { it.copy(message = "Cần Shizuku để khôi phục toàn bộ") }; return@launch }
@@ -218,7 +227,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         val fullyRestored = restored - failed
         container.registry.markRestored(fullyRestored)
         container.maintenance.setPackages(container.maintenance.packages() - fullyRestored)
-        mutable.update { it.copy(operationInProgress = false, results = results, optimizedPackages = container.registry.packages(), message = if (failed.isEmpty()) "Đã khôi phục cài đặt gốc cho toàn bộ ứng dụng" else "Đã khôi phục một phần; ${failed.size} ứng dụng cần kiểm tra") }
+        mutable.update { it.copy(operationInProgress = false, results = results, optimizedPackages = container.registry.packages(), alreadyOptimalPackages = container.registry.alreadyOptimal(), message = if (failed.isEmpty()) "Đã khôi phục cài đặt gốc cho toàn bộ ứng dụng" else "Đã khôi phục một phần; ${failed.size} ứng dụng cần kiểm tra") }
     }
     fun requestMaintenancePermission() = container.settings.modifySystemSettings()
     fun reapplyMaintenance() = viewModelScope.launch {

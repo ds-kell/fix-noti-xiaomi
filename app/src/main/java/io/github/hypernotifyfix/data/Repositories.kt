@@ -54,7 +54,11 @@ class OptimizationRegistry(context: Context) {
     fun initialized(): Boolean = prefs.contains("optimized_packages")
     fun replace(packages: Set<String>) = prefs.edit().putStringSet("optimized_packages", packages).apply()
     fun markOptimized(packages: Set<String>) = replace(this.packages() + packages)
-    fun markRestored(packages: Set<String>) = replace(this.packages() - packages)
+    fun markRestored(packages: Set<String>) { replace(this.packages() - packages); replaceAlreadyOptimal(alreadyOptimal() - packages) }
+
+    /** Found fully optimal with nothing to change (e.g. by an earlier install whose backups are gone): shown, never restorable. */
+    fun alreadyOptimal(): Set<String> = prefs.getStringSet("already_optimal_packages", emptySet()).orEmpty()
+    fun replaceAlreadyOptimal(packages: Set<String>) = prefs.edit().putStringSet("already_optimal_packages", packages).apply()
 }
 
 class ReportExporter(private val context: Context) {
