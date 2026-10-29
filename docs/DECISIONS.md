@@ -34,6 +34,12 @@ SettingsProvider rejects writes to non-public `Settings.System` keys from apps t
 
 Also ported from GMS-Protect: MiPush `REFRESH_WHITE_LIST_ACTION` and Aurogon `notifyChange` (both permission-free), an opt-in screen-off Aurogon refresh service, the FCM `local/status` probe with heartbeat/reconnect, and Greezer `mGmsLimitEnabled` via Shizuku `dumpsys` (runtime-only, resets on reboot). Not ported: the GMS binding probe, which only helps while the app is the top activity.
 
+## 009 — Assistant guard (Gemini on the power key)
+
+Observed on Xiaomi 15 Ultra, HyperOS OS3.0.314.0.WOACNXM: with Xiao AI removed and Google chosen as assistant, `VoiceInteractionManagerService` logs "no auto selectable voice recognition services" at boot (the user-installed Google app is not direct-boot aware) and clears `Settings.Secure.voice_interaction_service`, while `assistant` keeps the user's choice. The power-key long press (`system long_press_power_key=launch_google_search`) then fails with "Activity class GsaVoiceInteractionService does not exist". Setting `voice_recognition_service` explicitly does not prevent the wipe; reinstalling Xiao AI only changes the fallback to Xiao AI.
+
+The guard restores `voice_interaction_service` from `assistant`, only when they differ, the device is unlocked, and the target still resolves as a `VoiceInteractionService`. It needs WRITE_SECURE_SETTINGS, granted or revoked through Shizuku `pm grant/revoke`; holding the permission is the on/off switch, so no extra preference exists. Timing: `LOCKED_BOOT_COMPLETED` arrives seconds after boot, so a direct-boot-aware job is started then and waits for `USER_UNLOCKED` (delivered to registered receivers only). A JobScheduler content-URI watcher on both keys re-repairs within ~1 s if the system rewrites them after unlock. An automation-app macro on `BOOT_COMPLETED` worked but landed ~16 s after unlock on this ROM.
+
 ## Sources reviewed
 
 - Official Shizuku API repository and changelog: https://github.com/RikkaApps/Shizuku-API

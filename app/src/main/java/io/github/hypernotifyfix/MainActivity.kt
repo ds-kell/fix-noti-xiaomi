@@ -538,6 +538,7 @@ private fun SettingsScreen(state: UiState, vm: MainViewModel, onAurogon: (Boolea
     item { ScreenHeader("Cài đặt", "Điều khiển nâng cao và các bước HyperOS cần người dùng xác nhận.") }
     item { MaintenanceCard(state, vm) }
     item { SetupCard(state, vm) }
+    item { AssistantGuardCard(state, vm) }
     item { SettingsToggle(Icons.Outlined.ScreenLockPortrait, "Giữ allowlist Aurogon khi tắt màn hình", "Làm mới sau 40 giây, 2 phút rồi mỗi 10 phút; chạy dịch vụ nền, hơi tốn pin", state.aurogonKeepAlive, onAurogon) }
     item { SettingsToggle(Icons.Outlined.Tune, "Tùy chọn nâng cao", "Mở các can thiệp không cần thiết cho mọi ứng dụng", state.advanced, vm::setAdvanced) }
     if (state.advanced) {
@@ -616,6 +617,29 @@ private fun SetupCard(state: UiState, vm: MainViewModel) = ElevatedCard(colors =
             StatusPill(if (state.batteryExempt) "Đã miễn" to Mint else "Đang tối ưu" to Amber)
             if (!state.batteryExempt) TextButton(vm::requestBatteryExemption) { Text("Cho phép") }
         }
+    }
+}
+
+@Composable
+private fun AssistantGuardCard(state: UiState, vm: MainViewModel) = ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color.White)) {
+    val guard = state.assistantGuard
+    val enabled = guard?.enabled == true
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Icon(Icons.Outlined.Mic, null, tint = if (enabled && guard?.healthy == true) Mint else Amber)
+            Column(Modifier.weight(1f)) {
+                Text("Giữ trợ lý cho nút nguồn", fontWeight = FontWeight.Bold)
+                Text("HyperOS CN xóa dịch vụ trợ lý (Gemini) sau mỗi lần khởi động; tự đặt lại ngay khi mở khóa", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(enabled, vm::setAssistantGuard, enabled = state.uid == 2000 && !state.operationInProgress)
+        }
+        if (guard != null) {
+            Detail("Trợ lý đã chọn", guard.assistant?.substringBefore('/') ?: "Chưa chọn")
+            Detail("Dịch vụ đang dùng", guard.service?.substringBefore('/') ?: "Trống — giữ nút nguồn sẽ không mở trợ lý")
+            Detail("Tự sửa lần gần nhất", formatTime(guard.lastRun))
+            guard.lastResult?.let { Text("Lần gần nhất: $it", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        if (state.uid != 2000) Text("Bật hoặc tắt cần Shizuku một lần để cấp quyền WRITE_SECURE_SETTINGS. Sau đó chạy không cần Shizuku.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

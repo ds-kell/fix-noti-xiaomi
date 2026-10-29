@@ -13,8 +13,8 @@ android {
         applicationId = "io.github.hypernotifyfix"
         minSdk = 26
         targetSdk = 34
-        versionCode = 20
-        versionName = "0.8.0"
+        versionCode = 21
+        versionName = "0.9.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; aidl = true; buildConfig = true }

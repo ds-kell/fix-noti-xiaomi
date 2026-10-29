@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.hypernotifyfix.core.AppContainer
 import io.github.hypernotifyfix.core.helper.HelperStatus
+import io.github.hypernotifyfix.core.shell.PrivilegedCommand
+import io.github.hypernotifyfix.core.system.AssistantGuard
 import io.github.hypernotifyfix.core.system.AurogonKeepAlive
 import io.github.hypernotifyfix.core.system.AutostartState
 import io.github.hypernotifyfix.core.system.FcmProbe
@@ -35,6 +37,7 @@ data class UiState(
     val aggressiveSystemProfile: Boolean = false,
     val greezerGmsLimit: Boolean = false,
     val aurogonKeepAlive: Boolean = false,
+    val assistantGuard: AssistantGuard.Status? = null,
     val helperInstalled: Boolean = false,
     val helperNeedsUpdate: Boolean = false,
     val helperStatus: HelperStatus? = null,
@@ -78,6 +81,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         if (alive && granted && container.maintenance.helper.isInstalled()) container.maintenance.helper.ensureAccess(container.executor)
         // Like GMS-Protect, re-run the cheap protection pass every time the app is opened.
         if (maintained.isNotEmpty()) withContext(Dispatchers.IO) { container.maintenance.reapply("app_open") }
+        if (AssistantGuard.isEnabled(container.appContext)) { AssistantGuard.repair(container.appContext, "app_open"); AssistantGuard.watch(container.appContext) }
         val helper = container.maintenance.helper
         val helperStatus = withContext(Dispatchers.IO) { helper.status() }
         val history = container.sessions.list()
@@ -87,7 +91,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             container.registry.replace(migrated)
         }
         val optimized = container.registry.packages()
-        mutable.update { it.copy(loading = false, shizuku = if (uid != null && uid != 2000) "$status (UID không mong đợi: $uid)" else status, uid = uid, device = device, apps = container.catalog.list(), selected = if (it.selected.isEmpty()) maintained - setOf("com.google.android.gms", "com.google.android.gsf") else it.selected, history = history, optimizedPackages = optimized, maintenanceCanWrite = container.maintenance.canWrite(), maintenancePackages = maintained.size, maintenanceStatus = container.maintenance.lastResult(), helperInstalled = helper.isInstalled(), helperNeedsUpdate = helper.needsUpdate(), helperStatus = helperStatus, aurogonKeepAlive = AurogonKeepAlive.isEnabled(container.appContext), autostart = SetupState.autostart(container.appContext), batteryExempt = SetupState.batteryExempt(container.appContext)) }
+        mutable.update { it.copy(loading = false, shizuku = if (uid != null && uid != 2000) "$status (UID không mong đợi: $uid)" else status, uid = uid, device = device, apps = container.catalog.list(), selected = if (it.selected.isEmpty()) maintained - setOf("com.google.android.gms", "com.google.android.gsf") else it.selected, history = history, optimizedPackages = optimized, maintenanceCanWrite = container.maintenance.canWrite(), maintenancePackages = maintained.size, maintenanceStatus = container.maintenance.lastResult(), helperInstalled = helper.isInstalled(), helperNeedsUpdate = helper.needsUpdate(), helperStatus = helperStatus, aurogonKeepAlive = AurogonKeepAlive.isEnabled(container.appContext), assistantGuard = AssistantGuard.status(container.appContext), autostart =SetupState.autostart(container.appContext), batteryExempt = SetupState.batteryExempt(container.appContext)) }
         if (state.value.fcm == null) checkFcm()
     }
     fun requestShizuku() = container.executor.requestPermission()
@@ -249,7 +253,19 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         val ok = AurogonKeepAlive.setEnabled(container.appContext, value)
         mutable.update { it.copy(aurogonKeepAlive = AurogonKeepAlive.isEnabled(container.appContext), message = if (ok) null else "Không khởi động được dịch vụ Aurogon") }
     }
-    fun requestBatteryExemption() = SetupState.requestBatteryExemption(container.appContext)
+    fun setAssistantGuard(enabled: Boolean) = viewModelScope.launch {
+        if (!container.executor.isAvailable() || state.value.uid != 2000) { mutable.update { it.copy(message = "Cần Shizuku để cấp hoặc thu hồi quyền") }; return@launch }
+        mutable.update { it.copy(operationInProgress = true, message = null) }
+        val app = container.appContext
+        val result = container.executor.execute(PrivilegedCommand("assistant_guard.${if (enabled) "grant" else "revoke"}", listOf("pm", if (enabled) "grant" else "revoke", app.packageName, "android.permission.WRITE_SECURE_SETTINGS")))
+        val message = when {
+            AssistantGuard.isEnabled(app) != enabled -> result.stderr.ifBlank { "HyperOS từ chối; bật \"Gỡ lỗi USB (Cài đặt bảo mật)\" rồi thử lại" }
+            enabled -> { AssistantGuard.watch(app); if (AssistantGuard.repair(app, "manual")) "Đã bật giữ trợ lý cho nút nguồn" else AssistantGuard.status(app).lastResult }
+            else -> { AssistantGuard.cancel(app); "Đã tắt giữ trợ lý" }
+        }
+        mutable.update { it.copy(operationInProgress = false, assistantGuard = AssistantGuard.status(app), message = message) }
+    }
+    fun requestBatteryExemption() =SetupState.requestBatteryExemption(container.appContext)
     fun openAutostart() = container.settings.xiaomiAutostart(container.appContext.packageName)
     fun refreshSetupState() = mutable.update { it.copy(autostart = SetupState.autostart(container.appContext), batteryExempt = SetupState.batteryExempt(container.appContext), maintenanceCanWrite = container.maintenance.canWrite()) }
     override fun onCleared() { Shizuku.removeBinderReceivedListener(binderReceived); Shizuku.removeBinderDeadListener(binderDead); Shizuku.removeRequestPermissionResultListener(permission) }
