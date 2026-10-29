@@ -12,6 +12,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -315,10 +317,11 @@ private fun AppsScreen(state: UiState, query: String, onQuery: (String) -> Unit,
     ScreenHeader("Ứng dụng", "Chọn ứng dụng cần xử lý hoặc xem lại những ứng dụng đã tối ưu.")
     AppSearchField(query, onQuery)
     Spacer(Modifier.height(8.dp))
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        FilterChip(filter == "all", { filter = "all" }, { Text("Tất cả") }, modifier = Modifier.weight(1f))
-        FilterChip(filter == "selected", { filter = "selected" }, { Text("Đã chọn (${state.selected.size})", maxLines = 1) }, modifier = Modifier.weight(1.35f))
-        FilterChip(filter == "optimized", { filter = "optimized" }, { Text("Đã tối ưu (${state.optimizedPackages.size})", maxLines = 1) }, modifier = Modifier.weight(1.55f))
+    // Scrolls instead of splitting the width: fixed weights clipped the counts once the check icon or a large font appeared.
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FilterChip(filter == "all", { filter = "all" }, { Text("Tất cả (${state.apps.size})", maxLines = 1) })
+        FilterChip(filter == "selected", { filter = "selected" }, { Text("Đã chọn (${state.selected.size})", maxLines = 1) })
+        FilterChip(filter == "optimized", { filter = "optimized" }, { Text("Đã tối ưu (${state.optimizedPackages.size})", maxLines = 1) })
     }
     if (filter == "optimized" && state.optimizedPackages.isNotEmpty()) {
         OutlinedButton(onClick = { confirmRestoreAll = true }, enabled = !state.operationInProgress, modifier = Modifier.fillMaxWidth()) {
@@ -358,7 +361,18 @@ private fun InstalledAppIcon(packageName: String, iconFor: (String) -> Drawable?
 }
 
 @Composable
-private fun PreviewScreen(state: UiState, vm: MainViewModel) = LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+private fun PreviewScreen(state: UiState, vm: MainViewModel) {
+    var confirmApply by rememberSaveable { mutableStateOf(false) }
+    // After a dry run the main button still says "Chạy thử"; offer the real apply here instead of a switch at the top.
+    val dryRunDone = state.dryRun && state.plans.isNotEmpty() && state.results.isNotEmpty() && state.results.all { it.status == ResultStatus.SKIPPED }
+    PreviewList(state, vm, dryRunDone) { confirmApply = true }
+    if (confirmApply) {
+        AlertDialog(onDismissRequest = { confirmApply = false }, icon = { Icon(Icons.Filled.Security, null, tint = Indigo) }, title = { Text("Áp dụng thật?") }, text = { Text("Tắt chạy thử, sao lưu trạng thái hiện tại rồi áp dụng ${state.plans.size} thay đổi. Có thể hoàn tác ở tab Lịch sử.") }, confirmButton = { Button(onClick = { confirmApply = false; vm.setDryRun(false); vm.applyConfirmed() }) { Text("Sao lưu và áp dụng") } }, dismissButton = { TextButton(onClick = { confirmApply = false }) { Text("Hủy") } })
+    }
+}
+
+@Composable
+private fun PreviewList(state: UiState, vm: MainViewModel, dryRunDone: Boolean, onApplyForReal: () -> Unit) = LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     item { ScreenHeader("Xem lại thay đổi", "Hệ thống chỉ thay đổi sau khi hoàn tất sao lưu, xem lại và xác nhận.") }
     if (state.plans.isNotEmpty()) item {
         Surface(color = if (state.dryRun) Mint.copy(alpha = .10f) else Amber.copy(alpha = .12f), shape = RoundedCornerShape(18.dp)) {
@@ -383,6 +397,12 @@ private fun PreviewScreen(state: UiState, vm: MainViewModel) = LazyColumn(Modifi
     }
     items(state.plans) { plan -> ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color.White)) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Row { Text(packageLabel(plan.packageName), Modifier.weight(1f), fontWeight = FontWeight.SemiBold); StatusPill(riskLabel(plan.risk), if (plan.risk == RiskLevel.EXPERIMENTAL) Amber else Indigo) }; Text(operationLabel(plan.operationId), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(plan.packageName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline); HorizontalDivider(); Row { Detail("Hiện tại", displayValue(plan.operationId, (plan.before.value as? SnapshotValue.Present)?.raw), Modifier.weight(1f)); Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = MaterialTheme.colorScheme.outline); Detail("Sau khi sửa", displayValue(plan.operationId, plan.desired), Modifier.weight(1f)) }; Text("✓ Có thể hoàn tác đúng trạng thái cũ", style = MaterialTheme.typography.labelMedium, color = Mint) } } }
     if (state.plans.isNotEmpty()) item { Button(vm::applyConfirmed, Modifier.fillMaxWidth().height(54.dp), enabled = !state.operationInProgress, shape = RoundedCornerShape(16.dp)) { if (state.operationInProgress) CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp) else Icon(if (state.dryRun) Icons.Outlined.Science else Icons.Filled.Security, null); Spacer(Modifier.width(10.dp)); Text(if (state.operationInProgress) "Đang xử lý…" else if (state.dryRun) "Chạy thử an toàn" else "Sao lưu và áp dụng", fontWeight = FontWeight.SemiBold) } }
+    if (dryRunDone) item {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Chạy thử xong: chưa có gì bị thay đổi.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onApplyForReal, Modifier.fillMaxWidth().height(54.dp), enabled = !state.operationInProgress, shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = Mint)) { Icon(Icons.Filled.Security, null); Spacer(Modifier.width(10.dp)); Text("Áp dụng thật", fontWeight = FontWeight.SemiBold) }
+        }
+    }
     if (state.results.isNotEmpty()) item { Text("Kết quả", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp)) }
     items(state.results) { result -> OperationResultCard(result, state.apps.firstOrNull { it.packageName == result.packageName }?.label) }
 }
