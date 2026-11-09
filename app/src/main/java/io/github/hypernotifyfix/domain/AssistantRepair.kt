@@ -1,0 +1,23 @@
+package io.github.hypernotifyfix.domain
+
+/**
+ * `assistant` holds the user's choice and survives reboot; `voice_interaction_service` is what the
+ * power-key long press actually binds. Restore the latter from the former, but only once the chosen
+ * service can be bound (after first unlock for a non-system assistant).
+ */
+object AssistantRepair {
+    sealed interface Decision {
+        data object Healthy : Decision
+        data class Skip(val reason: String) : Decision
+        data class Write(val value: String) : Decision
+    }
+
+    fun plan(current: String?, assistant: String?, available: Set<String>, unlocked: Boolean): Decision {
+        val target = assistant?.trim().orEmpty()
+        if (target.isEmpty()) return Decision.Skip("Chưa chọn trợ lý mặc định")
+        if (current?.trim() == target) return Decision.Healthy
+        if (!unlocked) return Decision.Skip("Máy chưa mở khóa")
+        if (target !in available) return Decision.Skip("Trợ lý đã chọn không còn VoiceInteractionService")
+        return Decision.Write(target)
+    }
+}

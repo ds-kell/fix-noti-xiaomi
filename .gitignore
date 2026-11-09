@@ -10,3 +10,5 @@ captures/
 keystore.properties
 **/bin/
 release.jks.base64
+# The project's fixed signing key is committed on purpose so every build can update the last one.
+!signing/hypernotifyfix-release.jks

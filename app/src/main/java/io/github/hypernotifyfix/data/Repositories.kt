@@ -54,7 +54,11 @@ class OptimizationRegistry(context: Context) {
     fun initialized(): Boolean = prefs.contains("optimized_packages")
     fun replace(packages: Set<String>) = prefs.edit().putStringSet("optimized_packages", packages).apply()
     fun markOptimized(packages: Set<String>) = replace(this.packages() + packages)
-    fun markRestored(packages: Set<String>) = replace(this.packages() - packages)
+    fun markRestored(packages: Set<String>) { replace(this.packages() - packages); replaceAlreadyOptimal(alreadyOptimal() - packages) }
+
+    /** Found fully optimal with nothing to change (e.g. by an earlier install whose backups are gone): shown, never restorable. */
+    fun alreadyOptimal(): Set<String> = prefs.getStringSet("already_optimal_packages", emptySet()).orEmpty()
+    fun replaceAlreadyOptimal(packages: Set<String>) = prefs.edit().putStringSet("already_optimal_packages", packages).apply()
 }
 
 class ReportExporter(private val context: Context) {
@@ -79,6 +83,19 @@ class SettingsNavigator(private val context: Context) {
     fun battery(pkg: String) = launch(listOf(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS), Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg"))))
     fun xiaomiAutostart(pkg: String) = launch(listOf(Intent().setClassName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"), Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg"))))
     fun modifySystemSettings() = launch(listOf(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}"))))
+
+    /**
+     * "Assist & voice input" (its "Digital assistant app" row moves the assistant role; the direct
+     * MANAGE_DEFAULT_APP picker needs a system permission). With [popupFor], Xiaomi's permission editor
+     * for that app opens on top, so Back lands on the picker.
+     */
+    fun assistantPicker(popupFor: String?): Boolean {
+        val picker = Intent(Settings.ACTION_VOICE_INPUT_SETTINGS).takeIf { it.resolveActivity(context.packageManager) != null } ?: return false
+        val editor = popupFor?.let { Intent("miui.intent.action.APP_PERM_EDITOR").setPackage("com.miui.securitycenter").putExtra("extra_pkgname", it) }
+            ?.takeIf { it.resolveActivity(context.packageManager) != null }
+        context.startActivities(listOfNotNull(picker.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), editor).toTypedArray())
+        return true
+    }
 }
 
 class BackgroundMaintenanceStore(context: Context) {

@@ -60,18 +60,20 @@ private fun guideSteps(state: UiState) = listOf(
         listOf(
             "Ở Trang chủ bấm “Chạy kiểm tra”. App đọc trạng thái Doze, AppOps, App Standby và whitelist MILLET.",
             "Tab Xem trước liệt kê từng giới hạn, giá trị hiện tại và giá trị mới.",
-            "“Chạy thử” được bật sẵn: bấm lần đầu chỉ mô phỏng. Tắt Chạy thử trong Xem trước để áp dụng thật."
+            "Nếu Xem trước báo “Đã ở trạng thái tối ưu” thì không còn gì cần sửa, nên cũng không có nút áp dụng.",
+            "Bấm “Chạy thử an toàn” để mô phỏng trước; xong sẽ hiện nút “Áp dụng thật” để làm thật."
         ),
         done = state.diagnosticCompleted, action = "Mở Xem trước" to GuideTab.PREVIEW
     ),
     GuideStep(
         Icons.Outlined.Backup, "4. Áp dụng và khôi phục", "Mọi thay đổi đều được sao lưu và đọc lại để xác minh",
         listOf(
-            "App sao lưu trạng thái gốc trước khi ghi, rồi đọc lại từng thay đổi. Nếu một mục không khớp, các mục trước đó được hoàn tác.",
-            "Tab Lịch sử cho phép khôi phục đúng trạng thái của từng phiên.",
-            "Trong tab Ứng dụng có thể hoàn tác riêng từng app hoặc khôi phục toàn bộ."
+            "Không có nút sao lưu riêng: bấm “Áp dụng thật” là app tự sao lưu trạng thái gốc rồi mới ghi, sau đó đọc lại từng thay đổi. Nếu một mục không khớp, các mục trước đó được hoàn tác.",
+            "Mỗi lần áp dụng thành một phiên trong tab Lịch sử; bấm “Khôi phục” để trả đúng trạng thái trước phiên đó.",
+            "Trong tab Ứng dụng → Đã tối ưu, bấm “Khôi phục” cạnh từng app để trả app đó về cài đặt gốc và bỏ chọn nó.",
+            "App đã tối ưu sẵn từ trước (ví dụ sau khi gỡ và cài lại HyperNotify) không có bản sao lưu: “Khôi phục” sẽ đưa app về mặc định Android."
         ),
-        done = state.optimizedPackages.isNotEmpty(), action = "Mở Lịch sử" to GuideTab.HISTORY
+        done = state.allOptimized.isNotEmpty(), action = "Mở Lịch sử" to GuideTab.HISTORY
     ),
     GuideStep(
         Icons.Outlined.Shield, "5. Cài MILLET helper", "Giữ whitelist sau khi khởi động lại, không cần Shizuku",
@@ -112,11 +114,21 @@ private fun guideSteps(state: UiState) = listOf(
         action = "Mở Cài đặt" to GuideTab.SETTINGS
     ),
     GuideStep(
+        Icons.Outlined.Mic, "9. Chọn trợ lý AI cho nút nguồn", "Gemini, Claude, ChatGPT… thay cho Xiao AI",
+        listOf(
+            "Trong Cài đặt, thẻ “Trợ lý AI cho nút nguồn” liệt kê mọi app trợ lý đã cài. Chọn một app rồi bấm “Áp dụng” (cần Shizuku).",
+            "Áp dụng sẽ cấp micro và quyền mở cửa sổ khi chạy nền (Xiaomi chặn Claude, ChatGPT… nếu thiếu), đặt app làm trợ lý, đổi hành động giữ nút nguồn, tắt Xiao AI và bật “Tự giữ sau khi khởi động lại”.",
+            "HyperOS CN xóa dịch vụ trợ lý sau mỗi lần khởi động; phần tự giữ đặt lại ngay khi mở khóa, không cần Shizuku.",
+            "Muốn quay về Xiao AI: chọn Xiao AI rồi bấm Áp dụng."
+        ),
+        done = state.assistantGuard?.let { it.enabled && it.healthy }, action = "Mở Cài đặt" to GuideTab.SETTINGS
+    ),
+    GuideStep(
         Icons.AutoMirrored.Outlined.HelpOutline, "Câu hỏi thường gặp", "Giới hạn của app",
         listOf(
             "Có bảo đảm thông báo đến tức thì không? Không. Còn phụ thuộc máy chủ gửi, độ ưu tiên FCM, mạng và cách ROM xử lý.",
             "Sau khi cập nhật HyperOS cần làm gì? Mở app và chạy kiểm tra lại; bằng chứng tự sửa của helper được đặt lại cho bản ROM mới.",
-            "Gỡ HyperNotify có trả lại cài đặt cũ không? Hãy khôi phục toàn bộ trong tab Ứng dụng và gỡ helper trước khi gỡ app.",
+            "Gỡ HyperNotify có trả lại cài đặt cũ không? Không, và bản sao lưu cũng mất theo app. Hãy khôi phục toàn bộ trong tab Ứng dụng và gỡ helper trước khi gỡ app. Cập nhật (cài đè) thì giữ nguyên.",
             "Có cần root không? Không. Shizuku chỉ cần cho các thao tác có quyền shell."
         )
     ),

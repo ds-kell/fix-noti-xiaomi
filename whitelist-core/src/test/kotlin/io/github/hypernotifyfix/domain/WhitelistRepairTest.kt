@@ -32,6 +32,13 @@ class WhitelistRepairTest {
         assertTrue(WhitelistRepair.plan("com.a.app,com.b.app;com.c.app", null, gms) is WhitelistRepair.Decision.Refuse)
     }
 
+    @Test fun `remove drops only the package and keeps the delimiter`() {
+        assertEquals("com.a.app,com.b.app", XiaomiWhitelist.remove("com.a.app, com.google.android.gms,com.b.app", "com.google.android.gms"))
+        assertEquals("com.a.app;com.b.app", XiaomiWhitelist.remove("com.a.app;com.b.app", "com.x.app"))
+        assertEquals("", XiaomiWhitelist.remove("com.google.android.gms", "com.google.android.gms"))
+        assertEquals(null, XiaomiWhitelist.remove("com.a.app,com.b.app;com.c.app", "com.a.app"))
+    }
+
     @Test fun `containsAll checks parsed tokens`() {
         assertTrue(WhitelistRepair.containsAll("com.a.app;com.google.android.gms", gms))
         assertEquals(false, WhitelistRepair.containsAll("com.google.android.gmsx", gms))

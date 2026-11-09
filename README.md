@@ -27,6 +27,8 @@ Download `HyperNotifyFix-<version>.apk` from [Releases](../../releases/latest), 
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
+Signing: every build (debug and release, app and MILLET helper), local or CI, uses the fixed key committed in `signing/` and described by `keystore.properties`, so a new APK always installs over the previous one. Never regenerate it: a different key forces uninstalling the app and helper. Any field can be overridden with `HYPERNOTIFY_SIGNING_<FIELD>` env vars (e.g. `HYPERNOTIFY_SIGNING_STOREFILE`).
+
 ## Use
 
 1. Install Shizuku, enable Developer options and Wireless debugging, pair/start Shizuku, then grant HyperNotifyFix permission.
@@ -42,6 +44,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 - Implemented, runtime-probed: Doze whitelist add/exact rollback and `RUN_ANY_IN_BACKGROUND` AppOp exact-mode restore.
 - Read-only/public diagnostics: device/ROM metadata, notification permission availability, battery exemption, background restriction, Shizuku status/effective UID.
 - MILLET helper: an optional bundled `targetSdk 22` companion, installed once through Shizuku, keeps `MILLET_NO_RESTRICT_APP` (and `millet_white`/`cloud_lowlatency_whitelist` when present) repaired after reboots and PowerKeeper rewrites without Shizuku. See [decision 008](docs/DECISIONS.md).
+- Assistant picker (Shizuku): puts Gemini, Claude, ChatGPT or any installed assistant on the power-key long press instead of Xiao AI, and keeps it there after reboots on HyperOS CN, which clears `voice_interaction_service` on every boot. Choosing Xiao AI restores the original. See [decision 009](docs/DECISIONS.md).
 - HyperOS GMS nudges: MiPush whitelist refresh, Aurogon allowlist reload (optional screen-off keep-alive), FCM connection check/reconnect, and an experimental Greezer GMS-limiter switch (Shizuku, resets on reboot).
 - Experimental: Xiaomi `cloud_lowlatency_whitelist` remains an unverified candidate. Absent keys are never created; the current build exposes no automatic hidden-setting write.
 - Manual Settings intents are resolved before launch and fall back to Android App Info.
