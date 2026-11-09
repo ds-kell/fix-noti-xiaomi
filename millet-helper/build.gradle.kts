@@ -1,7 +1,14 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
 }
+
+// Release key: read from keystore.properties at the repo root (written by CI from secrets, never committed).
+// Without it, release builds fall back to the debug key so local builds keep working.
+val releaseKeystore = rootProject.file("keystore.properties").takeIf { it.exists() }
+    ?.let { file -> Properties().apply { file.inputStream().use(::load) } }
 
 android {
     namespace = "io.github.hypernotifyfix.millethelper"
@@ -20,10 +27,18 @@ android {
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     lint { checkReleaseBuilds = false; disable += setOf("ExpiredTargetSdkVersion", "OldTargetApi") }
+    signingConfigs {
+        releaseKeystore?.let { props -> create("release") {
+            storeFile = rootProject.file(props.getProperty("storeFile"))
+            storePassword = props.getProperty("storePassword")
+            keyAlias = props.getProperty("keyAlias")
+            keyPassword = props.getProperty("keyPassword")
+        } }
+    }
     buildTypes {
         release {
             // Must share the main app's certificate: the control provider is signature-protected.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             isMinifyEnabled = false
         }
     }

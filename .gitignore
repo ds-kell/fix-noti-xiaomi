@@ -9,3 +9,4 @@ captures/
 *.keystore
 keystore.properties
 **/bin/
+release.jks.base64

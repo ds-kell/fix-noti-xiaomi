@@ -1,10 +1,20 @@
-# HyperNotifyFix
+# HyperNotifyFix — fix delayed notifications on Xiaomi HyperOS / MIUI (no root)
+
+**Zalo, Messenger, Gmail, Telegram… notifications arriving late or only when you open the app?** HyperNotifyFix finds and fixes the HyperOS battery/background restrictions behind it, without root, using Shizuku.
+
+> 🇻🇳 Thông báo Zalo, Messenger, Gmail… đến trễ hoặc chỉ hiện khi mở app trên Xiaomi/Redmi/POCO (HyperOS, MIUI)? App này kiểm tra và sửa các giới hạn chạy nền của HyperOS, không cần root.
+
+[![Download APK](https://img.shields.io/github/v/release/ds-kell/fix-noti-xiaomi?label=Download%20APK&logo=android)](../../releases/latest)
 
 HyperNotifyFix is an open-source, no-root Android diagnostic assistant for delayed notifications on Xiaomi 15 Ultra/HyperOS. It uses a user-started [Shizuku](https://shizuku.rikka.app/) instance to inspect and, after backup/preview/confirmation, apply a small set of reversible Android changes.
 
 It cannot guarantee instant notifications. Delivery also depends on the sender's server, FCM priority, network, application design, notification settings, Android, and undocumented ROM behavior.
 
 > Screenshot placeholders: Home · App selection · Diagnostic preview · History/restore
+
+## Install
+
+Download `HyperNotifyFix-<version>.apk` from [Releases](../../releases/latest), install it, then follow **Use** below.
 
 ## Requirements and build
 
@@ -51,6 +61,15 @@ See [command evidence](docs/COMMAND_MATRIX.md), [decisions](docs/DECISIONS.md), 
 ## Reports and bugs
 
 Reports contain only selected packages, shortened fingerprint hash, compatibility results, effective UID, and redacted errors. They exclude accounts, serial, Android ID, tokens, notification content, and the raw restore backup. Open a bug with the templates under `.github/ISSUE_TEMPLATE` and attach the report after reviewing it.
+
+## ☕ Support / Ủng hộ
+
+Free and open source. If it saved you time, you can buy me a coffee — thank you!
+
+[![PayPal](https://img.shields.io/badge/PayPal-Donate-00457C?logo=paypal&logoColor=white)](https://paypal.me/truyennt)
+[![VietQR](https://img.shields.io/badge/VietQR-Chuy%E1%BB%83n%20kho%E1%BA%A3n-E31837)](https://github.com/ds-kell/ds-kell/blob/main/DONATE.md)
+
+<img src="https://raw.githubusercontent.com/ds-kell/ds-kell/main/assets/donate-vietqr.jpg" alt="VietQR VietinBank" width="180">
 
 ## License and disclaimer
 

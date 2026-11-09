@@ -1,9 +1,16 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
+
+// Release key: read from keystore.properties at the repo root (written by CI from secrets, never committed).
+// Without it, release builds fall back to the debug key so local builds keep working.
+val releaseKeystore = rootProject.file("keystore.properties").takeIf { it.exists() }
+    ?.let { file -> Properties().apply { file.inputStream().use(::load) } }
 
 android {
     namespace = "io.github.hypernotifyfix"
@@ -21,11 +28,18 @@ android {
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     lint { abortOnError = true; warningsAsErrors = false }
+    signingConfigs {
+        releaseKeystore?.let { props -> create("release") {
+            storeFile = rootProject.file(props.getProperty("storeFile"))
+            storePassword = props.getProperty("storePassword")
+            keyAlias = props.getProperty("keyAlias")
+            keyPassword = props.getProperty("keyPassword")
+        } }
+    }
     buildTypes {
         release {
-            // Keeps on-device test upgrades compatible with the existing installation while
-            // producing a non-debuggable release artifact. Replace before store distribution.
-            signingConfig = signingConfigs.getByName("debug")
+            // Release key from keystore.properties; the MILLET helper must use the same key.
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             isDebuggable = false
             isMinifyEnabled = false
         }
