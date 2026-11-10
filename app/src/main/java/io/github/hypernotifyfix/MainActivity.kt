@@ -60,6 +60,8 @@ import io.github.hypernotifyfix.core.model.RiskLevel
 import io.github.hypernotifyfix.core.model.SnapshotValue
 import io.github.hypernotifyfix.core.system.AutostartState
 import io.github.hypernotifyfix.core.system.FcmState
+import io.github.hypernotifyfix.toolkit.ToolkitScreen
+import io.github.hypernotifyfix.toolkit.ToolkitViewModel
 import java.text.DateFormat
 import java.util.Date
 
@@ -84,34 +86,41 @@ class MainActivity : ComponentActivity() {
                 small = RoundedCornerShape(12.dp), medium = RoundedCornerShape(18.dp), large = RoundedCornerShape(26.dp)
             )) {
                 val vm: MainViewModel = viewModel { MainViewModel(container) }
-                HyperNotifyApp(vm, container)
+                val toolkit: ToolkitViewModel = viewModel { ToolkitViewModel(container) }
+                HyperNotifyApp(vm, toolkit, container)
             }
         }
     }
 }
 
-private data class Destination(val label: String, val icon: ImageVector, val selectedIcon: ImageVector)
+private data class Destination(val tab: Int, val label: String, val icon: ImageVector, val selectedIcon: ImageVector)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun HyperNotifyApp(vm: MainViewModel, container: AppContainer) {
+private fun HyperNotifyApp(vm: MainViewModel, toolkit: ToolkitViewModel, container: AppContainer) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val toolkitState by toolkit.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
     var showGuide by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = showGuide) { showGuide = false }
     val snackbarHostState = remember { SnackbarHostState() }
     // Autostart/battery/WRITE_SETTINGS are changed in system screens; re-read when the user comes back.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refreshSetupState() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refreshSetupState(); toolkit.refreshLocal() }
     LaunchedEffect(state.message) {
         state.message?.let { message -> snackbarHostState.showSnackbar(message); vm.clearMessage() }
     }
+    LaunchedEffect(toolkitState.message) {
+        toolkitState.message?.let { message -> snackbarHostState.showSnackbar(message); toolkit.clearMessage() }
+    }
     val destinations = listOf(
-        Destination("Trang chủ", Icons.Outlined.Home, Icons.Filled.Home),
-        Destination("Ứng dụng", Icons.Outlined.Apps, Icons.Filled.Apps),
-        Destination("Xem trước", Icons.AutoMirrored.Outlined.FactCheck, Icons.AutoMirrored.Filled.FactCheck),
-        Destination("Lịch sử", Icons.Outlined.History, Icons.Filled.History),
-        Destination("Cài đặt", Icons.Outlined.Settings, Icons.Filled.Settings)
+        // Tab ids stay stable for GuideTab; "Công cụ" (5) is shown second.
+        Destination(0, "Trang chủ", Icons.Outlined.Home, Icons.Filled.Home),
+        Destination(5, "Công cụ", Icons.Outlined.Handyman, Icons.Filled.Handyman),
+        Destination(1, "Ứng dụng", Icons.Outlined.Apps, Icons.Filled.Apps),
+        Destination(2, "Xem trước", Icons.AutoMirrored.Outlined.FactCheck, Icons.AutoMirrored.Filled.FactCheck),
+        Destination(3, "Lịch sử", Icons.Outlined.History, Icons.Filled.History),
+        Destination(4, "Cài đặt", Icons.Outlined.Settings, Icons.Filled.Settings)
     )
 
     Scaffold(
@@ -135,12 +144,14 @@ private fun HyperNotifyApp(vm: MainViewModel, container: AppContainer) {
         },
         bottomBar = {
             NavigationBar(containerColor = Color.White, tonalElevation = 3.dp) {
-                destinations.forEachIndexed { index, destination ->
+                destinations.forEach { destination ->
+                    val index = destination.tab
                     NavigationBarItem(
                         selected = tab == index && !showGuide,
                         onClick = { tab = index; showGuide = false },
                         icon = { Icon(if (tab == index) destination.selectedIcon else destination.icon, destination.label) },
-                        label = { Text(destination.label, maxLines = 1) },
+                        label = { Text(destination.label, maxLines = 1, style = MaterialTheme.typography.labelSmall) },
+                        alwaysShowLabel = false,
                         colors = NavigationBarItemDefaults.colors(indicatorColor = Indigo.copy(alpha = .12f), selectedIconColor = Indigo, selectedTextColor = Indigo)
                     )
                 }
@@ -153,6 +164,7 @@ private fun HyperNotifyApp(vm: MainViewModel, container: AppContainer) {
                 1 -> AppsScreen(state, query, { query = it }, vm::select, vm::selectAll, vm::restorePackage, vm::restoreAll, container.catalog::icon)
                 2 -> PreviewScreen(state, vm)
                 3 -> HistoryScreen(state, vm::restore)
+                5 -> ToolkitScreen(toolkit, state.apps.map { it.packageName }.toSet()) { preset, packages -> vm.selectPreset(preset.title, packages); tab = 1 }
                 else -> {
                     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.setAurogonKeepAlive(true) }
                     SettingsScreen(state, vm) { enabled ->

@@ -46,6 +46,16 @@ Claude and ChatGPT were reached by the power key but HyperOS refused their assis
 
 Without Shizuku (0.10.3), switching between assistants after one Shizuku setup goes through the system: writing `assistant`/`voice_interaction_service` alone works immediately but the system resets `assistant` to the role holder on boot (observed), so the role must move. `ACTION_MANAGE_DEFAULT_APP` needs MANAGE_ROLE_HOLDERS; the app opens the public `ACTION_VOICE_INPUT_SETTINGS` ("Digital assistant app" row) instead, with Xiaomi's `miui.intent.action.APP_PERM_EDITOR` on top the first time a non-Google assistant is chosen. Xiao AI still needs Shizuku (it is uninstalled for the user and must be `install-existing`).
 
+## 010 — HyperOS toolkit tab (debloat, ads, default apps, bank-safe mode)
+
+The app grows a "Công cụ" tab so one Shizuku session covers the common HyperOS annoyances. This relaxes the "no package disabling/removal" invariant for one action only: `pm uninstall -k --user 0` of packages from a curated catalog (`toolkit/ToolkitCatalog.kt`). It keeps the APK and data, survives reboots, and `cmd package install-existing` undoes it. Rows appear only for packages present on the device; state is read from `PackageManager` (`MATCH_UNINSTALLED_PACKAGES` + `FLAG_INSTALLED`), so no backup file is needed. Non-system preinstalled apps are flagged: removing them for the only user deletes them, so they come back only from a store. Launchers, Security, SystemUI, Settings, telephony, GMS, Xiao AI (handled by decision 009) and `xmsf` (MiPush) are excluded and covered by a unit test. "Ads" is the MSA/analytics part of the same catalog; HyperOS has no reliable global ad switch.
+
+Default browser and launcher move through `cmd role` like the assistant role (other holders removed, then added, then re-read). Third-party launchers may lose full-screen gestures on HyperOS; the dialog says so.
+
+Bank-safe mode: many Vietnamese banking apps refuse to start while developer options, USB debugging or wireless debugging are on, and Shizuku needs wireless debugging. Everything the app applies persists without Shizuku (user-0 uninstalls, roles, MILLET helper, assistant guard), so the tab ends with "Tắt ngay": it writes `adb_wifi_enabled`, `adb_enabled`, `development_settings_enabled` = 0 with the app's own WRITE_SECURE_SETTINGS when granted (assistant guard), else as the last Shizuku command (adb going down stops Shizuku, so the result may never arrive), else opens Developer options. The app never needs root, accessibility or an unlocked bootloader, which banking apps also check.
+
+Keep-alive presets only pre-select installed apps of a group (messaging, mail, wearables, music, drivers) in the Apps tab; the normal diagnose → preview → apply flow does the work.
+
 ## Sources reviewed
 
 - Official Shizuku API repository and changelog: https://github.com/RikkaApps/Shizuku-API

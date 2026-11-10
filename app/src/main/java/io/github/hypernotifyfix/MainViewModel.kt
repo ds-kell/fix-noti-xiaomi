@@ -127,6 +127,14 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         container.maintenance.setPackages(selected + support)
         it.copy(selected = selected, maintenancePackages = (selected + support).size, message = "Đã chọn lại ${packages.size} app; HyperNotify sẽ tự bảo vệ chúng sau khi khởi động lại")
     }
+    /** Toolkit keep-alive preset: adds the installed apps of one group to the selection. */
+    fun selectPreset(title: String, packages: List<String>) = mutable.update {
+        val selected = it.selected + packages
+        val support = setOf("com.google.android.gms", "com.google.android.gsf").filter(container.catalog::isInstalled)
+        container.maintenance.setPackages(selected + support)
+        it.copy(selected = selected, maintenancePackages = (selected + support).size, diagnosticScope = emptySet(), plans = emptyList(), results = emptyList(), diagnosticCompleted = false,
+            message = "Đã chọn ${packages.size} app nhóm $title. Mở Xem trước để chẩn đoán và áp dụng")
+    }
     fun setDryRun(value: Boolean) =mutable.update { it.copy(dryRun = value) }
     fun setAdvanced(value: Boolean) = updateOptions { it.copy(advanced = value, greezerGmsLimit = if (value) it.greezerGmsLimit else false, experimental = if (value) it.experimental else false, xiaomiAutostartOps = if (value) it.xiaomiAutostartOps else false, networkWhitelist = if (value) it.networkWhitelist else false, aggressiveAppOps = if (value) it.aggressiveAppOps else false, aggressiveSystemProfile = if (value) it.aggressiveSystemProfile else false) }
     fun setExperimental(value: Boolean) = updateOptions { it.copy(experimental = value && it.advanced) }

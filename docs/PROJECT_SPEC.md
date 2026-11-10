@@ -8,7 +8,7 @@ HyperNotifyFix is an open-source, no-root Android application for diagnosing and
 - Only packages selected from the installed-package catalog are accepted. User text is never concatenated into a shell command.
 - Every command has an identifier, argument list, timeout, exit code, stdout, stderr, and duration. Reports redact sensitive-looking values.
 - Every supported write is reversible and verified by reading state again. Unreadable is distinct from absent and empty.
-- No root, bootloader, SELinux, verified-boot, package disabling/removal, app-data deletion, accessibility automation, unrelated permission grants, or global battery-management disabling.
+- No root, bootloader, SELinux, verified-boot, package disabling/removal (except the toolkit's reversible per-user uninstall of catalog packages, decision 010), app-data deletion, accessibility automation, unrelated permission grants, or global battery-management disabling.
 - Xiaomi hidden settings are experimental, off by default, must already exist, must parse losslessly, and restore the exact raw value.
 
 ## Scope
