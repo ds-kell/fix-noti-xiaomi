@@ -125,7 +125,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         val selected = it.selected + packages
         val support = setOf("com.google.android.gms", "com.google.android.gsf").filter(container.catalog::isInstalled)
         container.maintenance.setPackages(selected + support)
-        it.copy(selected = selected, maintenancePackages = (selected + support).size, message = "Đã chọn lại ${packages.size} app; HyperNotify sẽ tự bảo vệ chúng sau khi khởi động lại")
+        it.copy(selected = selected, maintenancePackages = (selected + support).size, message = "Đã chọn lại ${packages.size} app; HyperOS Toolkit sẽ tự bảo vệ chúng sau khi khởi động lại")
     }
     /** Toolkit keep-alive preset: adds the installed apps of one group to the selection. */
     fun selectPreset(title: String, packages: List<String>) = mutable.update {

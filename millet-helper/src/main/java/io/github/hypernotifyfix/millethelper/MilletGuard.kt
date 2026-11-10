@@ -18,7 +18,7 @@ object MilletGuard {
         val app = context.applicationContext
         val state = HelperState(app)
         val configured = state.packages()
-        if (configured.isEmpty()) return finish(state, false, "Chưa nhận danh sách ứng dụng từ HyperNotify", 0)
+        if (configured.isEmpty()) return finish(state, false, "Chưa nhận danh sách ứng dụng từ HyperOS Toolkit", 0)
         if (!runCatching { Settings.System.canWrite(app) }.getOrDefault(false)) return finish(state, false, "Helper chưa có quyền sửa cài đặt hệ thống", 0)
         val required = configured + app.packageName
         var healthyKeys = 0

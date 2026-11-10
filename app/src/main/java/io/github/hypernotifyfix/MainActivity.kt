@@ -132,10 +132,14 @@ private fun HyperNotifyApp(vm: MainViewModel, toolkit: ToolkitViewModel, contain
                 actions = { if (!showGuide) IconButton({ showGuide = true }) { Icon(Icons.AutoMirrored.Outlined.HelpOutline, "Hướng dẫn sử dụng", tint = Indigo) } },
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Image(painterResource(R.drawable.notification_icon), "HyperNotifyFix", Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)))
+                        // Same layers as the adaptive launcher icon (Compose cannot paint a layer-list).
+                        Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))) {
+                            Image(painterResource(R.drawable.ic_launcher_background), null, Modifier.fillMaxSize())
+                            Image(painterResource(R.drawable.ic_launcher_foreground), "HyperOS Toolkit", Modifier.fillMaxSize())
+                        }
                         Column {
-                            Text("HyperNotify", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("Tối ưu thông báo nền an toàn", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("HyperOS Toolkit", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("Thông báo · app rác · trợ lý AI", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 },
@@ -375,7 +379,7 @@ private fun AppsScreen(state: UiState, query: String, onQuery: (String) -> Unit,
             confirmButton = { Button(onClick = { confirmRestore = null; restore(pkg) }) { Text("Khôi phục") } }, dismissButton = { TextButton(onClick = { confirmRestore = null }) { Text("Hủy") } })
     }
     if (confirmRestoreAll) {
-        AlertDialog(onDismissRequest = { confirmRestoreAll = false }, icon = { Icon(Icons.Outlined.Restore, null, tint = Amber) }, title = { Text("Khôi phục toàn bộ?") }, text = { Text("HyperNotify sẽ dùng các bản sao lưu để trả mọi ứng dụng đã tối ưu về đúng trạng thái ban đầu. Thao tác này cần Shizuku đang kết nối.") }, confirmButton = { Button(onClick = { confirmRestoreAll = false; restoreAll() }) { Text("Khôi phục tất cả") } }, dismissButton = { TextButton(onClick = { confirmRestoreAll = false }) { Text("Hủy") } })
+        AlertDialog(onDismissRequest = { confirmRestoreAll = false }, icon = { Icon(Icons.Outlined.Restore, null, tint = Amber) }, title = { Text("Khôi phục toàn bộ?") }, text = { Text("HyperOS Toolkit sẽ dùng các bản sao lưu để trả mọi ứng dụng đã tối ưu về đúng trạng thái ban đầu. Thao tác này cần Shizuku đang kết nối.") }, confirmButton = { Button(onClick = { confirmRestoreAll = false; restoreAll() }) { Text("Khôi phục tất cả") } }, dismissButton = { TextButton(onClick = { confirmRestoreAll = false }) { Text("Hủy") } })
     }
 }
 
@@ -631,7 +635,7 @@ private fun MaintenanceCard(state: UiState, vm: MainViewModel) = ElevatedCard(co
                 Text(if (state.helperInstalled) "MILLET helper đã cài — hoạt động không cần Shizuku" else "Chưa có helper: Android chặn app targetSdk mới ghi khóa MILLET", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        Text("Đang bảo vệ ${state.maintenancePackages} package cùng Play Store và HyperNotify. Helper theo dõi thay đổi của MILLET và ghi lại ngay khi HyperOS xóa, kể cả sau khi khởi động lại.", style = MaterialTheme.typography.bodySmall)
+        Text("Đang bảo vệ ${state.maintenancePackages} package cùng Play Store và HyperOS Toolkit. Helper theo dõi thay đổi của MILLET và ghi lại ngay khi HyperOS xóa, kể cả sau khi khởi động lại.", style = MaterialTheme.typography.bodySmall)
         if (state.helperInstalled && helper != null) {
             Detail("Quyền sửa cài đặt của helper", if (helper.canWrite) "Đã có" else "Chưa có")
             Detail("Theo dõi MILLET", if (helper.watcherScheduled) "Đang chờ thay đổi" else "Chưa đăng ký")
@@ -644,7 +648,7 @@ private fun MaintenanceCard(state: UiState, vm: MainViewModel) = ElevatedCard(co
             OutlinedButton(vm::reapplyMaintenance, Modifier.weight(1f)) { Text("Kiểm tra và áp dụng") }
         }
         if (!state.helperInstalled && state.uid != 2000) Text("Cài helper cần Shizuku một lần. Sau đó helper tự chạy mà không cần Shizuku.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (!state.helperInstalled && !state.maintenanceCanWrite) TextButton(vm::requestMaintenancePermission, Modifier.fillMaxWidth()) { Text("Cấp quyền sửa cài đặt cho HyperNotify") }
+        if (!state.helperInstalled && !state.maintenanceCanWrite) TextButton(vm::requestMaintenancePermission, Modifier.fillMaxWidth()) { Text("Cấp quyền sửa cài đặt cho HyperOS Toolkit") }
         if (state.helperInstalled) TextButton(vm::uninstallHelper, Modifier.fillMaxWidth(), enabled = state.uid == 2000 && !state.operationInProgress) { Text("Gỡ MILLET helper") }
     }
 }
@@ -652,7 +656,7 @@ private fun MaintenanceCard(state: UiState, vm: MainViewModel) = ElevatedCard(co
 @Composable
 private fun SetupCard(state: UiState, vm: MainViewModel) = ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color.White)) {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Thiết lập nền cho HyperNotify", fontWeight = FontWeight.Bold)
+        Text("Thiết lập nền cho HyperOS Toolkit", fontWeight = FontWeight.Bold)
         val (autostartLabel, autostartColor) = when (state.autostart) {
             AutostartState.ALLOWED -> "Đã bật" to Mint
             AutostartState.DENIED -> "Đang tắt" to Color(0xFFD14343)

@@ -41,7 +41,7 @@ private fun guideSteps(state: UiState) = listOf(
         listOf(
             "Cài Shizuku, bật Tùy chọn nhà phát triển → Gỡ lỗi không dây.",
             "Trong Shizuku chọn “Ghép nối”, nhập mã ghép nối, rồi bấm “Bắt đầu”.",
-            "Quay lại HyperNotify và cấp quyền khi được hỏi. Trang chủ phải hiện “Đã kết nối”.",
+            "Quay lại HyperOS Toolkit và cấp quyền khi được hỏi. Trang chủ phải hiện “Đã kết nối”.",
             "Shizuku sẽ dừng sau mỗi lần khởi động lại máy; chỉ cần bật lại khi muốn đổi cấu hình."
         ),
         done = state.uid == 2000, action = "Mở Trang chủ" to GuideTab.HOME
@@ -71,7 +71,7 @@ private fun guideSteps(state: UiState) = listOf(
             "Không có nút sao lưu riêng: bấm “Áp dụng thật” là app tự sao lưu trạng thái gốc rồi mới ghi, sau đó đọc lại từng thay đổi. Nếu một mục không khớp, các mục trước đó được hoàn tác.",
             "Mỗi lần áp dụng thành một phiên trong tab Lịch sử; bấm “Khôi phục” để trả đúng trạng thái trước phiên đó.",
             "Trong tab Ứng dụng → Đã tối ưu, bấm “Khôi phục” cạnh từng app để trả app đó về cài đặt gốc và bỏ chọn nó.",
-            "App đã tối ưu sẵn từ trước (ví dụ sau khi gỡ và cài lại HyperNotify) không có bản sao lưu: “Khôi phục” sẽ đưa app về mặc định Android."
+            "App đã tối ưu sẵn từ trước (ví dụ sau khi gỡ và cài lại HyperOS Toolkit) không có bản sao lưu: “Khôi phục” sẽ đưa app về mặc định Android."
         ),
         done = state.allOptimized.isNotEmpty(), action = "Mở Lịch sử" to GuideTab.HISTORY
     ),
@@ -87,9 +87,9 @@ private fun guideSteps(state: UiState) = listOf(
         done = state.helperInstalled && state.helperStatus?.lastSuccess == true, action = "Mở Cài đặt" to GuideTab.SETTINGS
     ),
     GuideStep(
-        Icons.Outlined.RocketLaunch, "6. Cho phép HyperNotify chạy nền", "Tự khởi chạy và không tối ưu pin",
+        Icons.Outlined.RocketLaunch, "6. Cho phép HyperOS Toolkit chạy nền", "Tự khởi chạy và không tối ưu pin",
         listOf(
-            "Bật Tự khởi chạy để HyperNotify nhận sự kiện khởi động máy.",
+            "Bật Tự khởi chạy để HyperOS Toolkit nhận sự kiện khởi động máy.",
             "Chọn “Không hạn chế” trong tiết kiệm pin để dịch vụ Aurogon (nếu bật) không bị dừng.",
             "Nên làm thêm cho từng app đã chọn: bật Tự khởi chạy, Tiết kiệm pin = Không hạn chế, cho phép thông báo trên màn hình khóa."
         ),
@@ -128,7 +128,7 @@ private fun guideSteps(state: UiState) = listOf(
         listOf(
             "Có bảo đảm thông báo đến tức thì không? Không. Còn phụ thuộc máy chủ gửi, độ ưu tiên FCM, mạng và cách ROM xử lý.",
             "Sau khi cập nhật HyperOS cần làm gì? Mở app và chạy kiểm tra lại; bằng chứng tự sửa của helper được đặt lại cho bản ROM mới.",
-            "Gỡ HyperNotify có trả lại cài đặt cũ không? Không, và bản sao lưu cũng mất theo app. Hãy khôi phục toàn bộ trong tab Ứng dụng và gỡ helper trước khi gỡ app. Cập nhật (cài đè) thì giữ nguyên.",
+            "Gỡ HyperOS Toolkit có trả lại cài đặt cũ không? Không, và bản sao lưu cũng mất theo app. Hãy khôi phục toàn bộ trong tab Ứng dụng và gỡ helper trước khi gỡ app. Cập nhật (cài đè) thì giữ nguyên.",
             "Có cần root không? Không. Shizuku chỉ cần cho các thao tác có quyền shell."
         )
     ),
