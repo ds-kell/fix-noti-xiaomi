@@ -7,7 +7,7 @@ plugins {
 }
 
 // One fixed key for every Android build, local and CI, so a new APK always installs over the old one
-// (the app and the MILLET helper must also share it). Committed keystore.properties, overridable per
+// (the app and the MILLET helper must also share it). Git-ignored keystore.properties (CI writes it from secrets), overridable per
 // field with HYPERNOTIFY_SIGNING_* env vars; if incomplete, each machine's own debug key as before.
 val fixedSigning = java.util.Properties()
     .apply { rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use(::load) }

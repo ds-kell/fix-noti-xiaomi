@@ -15,17 +15,17 @@ jobs:
       - uses: android-actions/setup-android@v3
         with: {packages: 'platform-tools'}
       - uses: gradle/actions/setup-gradle@v4
-      - name: Optional release keystore from secrets
+      - name: Signing key from secrets
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          # No secrets: keep the committed signing key (keystore.properties + signing/).
-          if [ -z "$KEYSTORE_BASE64" ]; then echo "Using the committed signing key"; exit 0; fi
-          echo "$KEYSTORE_BASE64" | base64 -d > release.jks
-          printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+          # Never publish an APK signed with another key: users could not update.
+          if [ -z "$KEYSTORE_BASE64" ]; then echo "::error::Signing secrets are missing (see scripts/export-signing-secrets.sh)"; exit 1; fi
+          mkdir -p signing && echo "$KEYSTORE_BASE64" | base64 -d > signing/hypernotifyfix-release.jks
+          printf 'storeFile=signing/hypernotifyfix-release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
       - run: chmod +x gradlew
       - run: ./gradlew testDebugUnitTest assembleRelease

@@ -29,7 +29,7 @@ Download `HyperNotifyFix-<version>.apk` from [Releases](../../releases/latest), 
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Signing: every build (debug and release, app and MILLET helper), local or CI, uses the fixed key committed in `signing/` and described by `keystore.properties`, so a new APK always installs over the previous one. Never regenerate it: a different key forces uninstalling the app and helper. Any field can be overridden with `HYPERNOTIFY_SIGNING_<FIELD>` env vars (e.g. `HYPERNOTIFY_SIGNING_STOREFILE`).
+Signing: every build (debug and release, app and MILLET helper), local or CI, uses one fixed key, so a new APK always installs over the previous one. The key is **not** in git: locally it lives in `signing/hypernotifyfix-release.jks` with `keystore.properties` (both git-ignored); CI recreates them from the `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` repository secrets (`scripts/export-signing-secrets.sh` prints them). Never regenerate it: a different key forces uninstalling the app and helper. Any field can be overridden with `HYPERNOTIFY_SIGNING_<FIELD>` env vars (e.g. `HYPERNOTIFY_SIGNING_STOREFILE`).
 
 ## Use
 

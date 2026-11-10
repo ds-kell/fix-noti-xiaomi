@@ -12,7 +12,18 @@ jobs:
         with: {packages: 'platform-tools'}
       - uses: gradle/actions/setup-gradle@v4
       - run: chmod +x gradlew
-      # Signed with the committed key (keystore.properties), so CI APKs install over local builds and vice versa.
+      # Same fixed key as local builds (from secrets), so CI APKs install over them. Without secrets: runner debug key.
+      - name: Signing key from secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then echo "No signing secrets, using the debug key"; exit 0; fi
+          mkdir -p signing && echo "$KEYSTORE_BASE64" | base64 -d > signing/hypernotifyfix-release.jks
+          printf 'storeFile=signing/hypernotifyfix-release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
       - run: ./gradlew assembleDebug testDebugUnitTest lintDebug
       - uses: actions/upload-artifact@v4
         with: {name: HyperNotifyFix-debug, path: app/build/outputs/apk/debug/app-debug.apk}
