@@ -1,10 +1,12 @@
-# HyperNotifyFix — fix delayed notifications & pick your AI assistant on Xiaomi HyperOS (no root)
+# HyperNotifyFix — fix delayed notifications, remove bloatware & ads, pick your AI assistant on Xiaomi HyperOS (no root)
 
 **Zalo, Messenger, Gmail, Telegram… notifications arriving late or only when you open the app?** HyperNotifyFix finds and fixes the HyperOS battery/background restrictions behind it, without root, using Shizuku.
 
 **Want Gemini, ChatGPT or Claude on the power button instead of Xiao AI?** Pick any installed assistant; HyperNotifyFix sets it up (microphone, background-window permission, power-key action) and keeps it after every reboot, even on HyperOS China ROMs that reset it.
 
-> 🇻🇳 Thông báo Zalo, Messenger, Gmail… đến trễ hoặc chỉ hiện khi mở app trên Xiaomi/Redmi/POCO (HyperOS, MIUI)? App này kiểm tra và sửa các giới hạn chạy nền của HyperOS, không cần root. Ngoài ra còn đổi trợ lý AI khi giữ nút nguồn từ Xiao AI sang Gemini, ChatGPT, Claude… và tự giữ sau mỗi lần khởi động lại.
+**HyperOS toolkit:** remove bloatware and the MSA ad service (reversible, per user), set the default browser or launcher HyperOS keeps locked, one-tap keep-alive presets for messaging, smartwatch and music apps, and a **bank-safe mode** that turns developer options and wireless debugging back off when you are done, so banking apps open normally while every fix stays in place.
+
+> 🇻🇳 Thông báo Zalo, Messenger, Gmail… đến trễ hoặc chỉ hiện khi mở app trên Xiaomi/Redmi/POCO (HyperOS, MIUI)? App này kiểm tra và sửa các giới hạn chạy nền của HyperOS, không cần root. Ngoài ra còn đổi trợ lý AI khi giữ nút nguồn từ Xiao AI sang Gemini, ChatGPT, Claude… và tự giữ sau mỗi lần khởi động lại. Tab **Công cụ**: gỡ app rác, tắt quảng cáo hệ thống (MSA), đổi trình duyệt/launcher mặc định, chọn nhanh app cần chạy nền, và tắt Tùy chọn nhà phát triển khi xong để app ngân hàng vẫn dùng được.
 
 [![Download APK](https://img.shields.io/github/v/release/ds-kell/fix-noti-xiaomi?label=Download%20APK&logo=android)](../../releases/latest)
 
@@ -41,7 +43,7 @@ Signing: every build (debug and release, app and MILLET helper), local or CI, us
 
 ## Safety model and supported operations
 
-- Commands are fixed argument lists; package names come from `PackageManager`; no `sh -c` or arbitrary command input.
+- Commands are fixed argument lists; package names come from `PackageManager` or a built-in catalog; no arbitrary command input. The only `sh -c` is a constant script that turns developer options off (bank-safe mode).
 - Private, schema-versioned backup precedes writes. Apply success requires read-back verification; a transaction failure rolls back earlier verified changes.
 - Implemented, runtime-probed: Doze whitelist add/exact rollback and `RUN_ANY_IN_BACKGROUND` AppOp exact-mode restore.
 - Read-only/public diagnostics: device/ROM metadata, notification permission availability, battery exemption, background restriction, Shizuku status/effective UID.
@@ -49,6 +51,7 @@ Signing: every build (debug and release, app and MILLET helper), local or CI, us
 - Assistant picker (Shizuku): puts Gemini, Claude, ChatGPT or any installed assistant on the power-key long press instead of Xiao AI, and keeps it there after reboots on HyperOS CN, which clears `voice_interaction_service` on every boot. Choosing Xiao AI restores the original. See [decision 009](docs/DECISIONS.md).
 - HyperOS GMS nudges: MiPush whitelist refresh, Aurogon allowlist reload (optional screen-off keep-alive), FCM connection check/reconnect, and an experimental Greezer GMS-limiter switch (Shizuku, resets on reboot).
 - Experimental: Xiaomi `cloud_lowlatency_whitelist` remains an unverified candidate. Absent keys are never created; the current build exposes no automatic hidden-setting write.
+- Toolkit tab (Shizuku): per-user removal/restore of a curated bloat and ad catalog (`pm uninstall -k --user 0` / `cmd package install-existing`), default browser/launcher through `cmd role`, keep-alive presets, and bank-safe mode. Everything it applies persists without Shizuku. See [decision 010](docs/DECISIONS.md).
 - Manual Settings intents are resolved before launch and fall back to Android App Info.
 
 Changing background policy can increase battery consumption. Google Play Services changes deserve particular caution.
