@@ -1,5 +1,6 @@
 package io.github.hypernotifyfix.core.system
 
+import io.github.hypernotifyfix.core.t
 import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
@@ -111,12 +112,12 @@ class AurogonKeepAliveService : Service() {
 
     private fun notification(): Notification {
         val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Giữ allowlist Aurogon", NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) })
+        manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, t("Giữ allowlist Aurogon", "Keeping the Aurogon allowlist"), NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) })
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.notification_icon_monochrome)
-            .setContentTitle("Đang giữ Google Play services khỏi bị giới hạn")
-            .setContentText("Làm mới allowlist Aurogon khi màn hình tắt")
+            .setContentTitle(t("Đang giữ Google Play services khỏi bị giới hạn", "Keeping Google Play services from being limited"))
+            .setContentText(t("Làm mới allowlist Aurogon khi màn hình tắt", "Refreshes the Aurogon allowlist while the screen is off"))
             .setContentIntent(open)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

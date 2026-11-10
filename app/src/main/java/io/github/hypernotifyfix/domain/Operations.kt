@@ -1,5 +1,6 @@
 package io.github.hypernotifyfix.domain
 
+import io.github.hypernotifyfix.core.t
 import io.github.hypernotifyfix.core.model.*
 import io.github.hypernotifyfix.core.shell.PrivilegedCommand
 import io.github.hypernotifyfix.core.shell.PrivilegedCommandExecutor
@@ -46,18 +47,18 @@ class XiaomiSystemWhitelistOperation(
 
     override suspend fun apply(context: OperationContext, plan: OperationPlan): OperationResult {
         if (plan.before.value !is SnapshotValue.Present || plan.desired != "true" || !context.packages.isInstalled(plan.packageName)) {
-            return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, "Không có bản sao lưu hợp lệ")
+            return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, t("Không có bản sao lưu hợp lệ", "No valid backup"))
         }
         // Re-read before every write so multiple plans merge instead of overwriting one another.
         val current = (read(context, plan.packageName).value as? SnapshotValue.Present)?.raw
-            ?: return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, "Không đọc được whitelist Xiaomi hiện tại")
+            ?: return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, t("Không đọc được whitelist Xiaomi hiện tại", "Could not read the current Xiaomi whitelist"))
         val merged = XiaomiWhitelist.merge(current, plan.packageName)
-            ?: return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, "Định dạng whitelist Xiaomi không an toàn")
+            ?: return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, t("Định dạng whitelist Xiaomi không an toàn", "Unsafe Xiaomi whitelist format"))
         val result = context.executor.execute(PrivilegedCommand("$id.set", listOf("settings", "put", namespace, key, merged)))
-        if (!result.successful) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, result.stderr.ifBlank { "Áp dụng thất bại" })
+        if (!result.successful) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, result.stderr.ifBlank { t("Áp dụng thất bại", "Apply failed") })
         val verified = verify(context, plan)
         return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED,
-            if (verified) "Đã xác minh whitelist chạy nền Xiaomi" else "Trạng thái đọc lại không khớp", verified)
+            if (verified) t("Đã xác minh whitelist chạy nền Xiaomi", "Xiaomi background whitelist verified") else t("Trạng thái đọc lại không khớp", "Read-back state does not match"), verified)
     }
 
     override suspend fun verify(context: OperationContext, plan: OperationPlan): Boolean {
@@ -67,12 +68,12 @@ class XiaomiSystemWhitelistOperation(
 
     override suspend fun rollback(context: OperationContext, snapshot: OperationSnapshot): OperationResult {
         val original = (snapshot.value as? SnapshotValue.Present)?.raw
-            ?: return OperationResult(id, ResultStatus.ROLLBACK_FAILED, "Không đọc được whitelist Xiaomi ban đầu")
-        if (XiaomiWhitelist.parse(original) == null) return OperationResult(id, ResultStatus.ROLLBACK_FAILED, "Whitelist Xiaomi ban đầu không an toàn")
+            ?: return OperationResult(id, ResultStatus.ROLLBACK_FAILED, t("Không đọc được whitelist Xiaomi ban đầu", "Could not read the original Xiaomi whitelist"))
+        if (XiaomiWhitelist.parse(original) == null) return OperationResult(id, ResultStatus.ROLLBACK_FAILED, t("Whitelist Xiaomi ban đầu không an toàn", "Original Xiaomi whitelist is unsafe"))
         val result = context.executor.execute(PrivilegedCommand("$id.restore", listOf("settings", "put", namespace, key, original)))
         val restored = result.successful && (read(context, snapshot.packageName).value as? SnapshotValue.Present)?.raw == original
         return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED,
-            if (restored) "Đã khôi phục chính xác whitelist Xiaomi" else "Khôi phục thất bại", restored)
+            if (restored) t("Đã khôi phục chính xác whitelist Xiaomi", "Xiaomi whitelist restored exactly") else t("Khôi phục thất bại", "Restore failed"), restored)
     }
 }
 
@@ -89,21 +90,21 @@ class DozeWhitelistOperation : ReversibleOperation {
     }
     override fun plan(current: OperationSnapshot, desired: String) = OperationPlan(id, current.packageName, current, desired, riskLevel)
     override suspend fun apply(context: OperationContext, plan: OperationPlan): OperationResult {
-        if (!context.packages.isInstalled(plan.packageName) || plan.before.value !is SnapshotValue.Present) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, "Ứng dụng hoặc bản sao lưu không hợp lệ")
-        val add = plan.desired.toBooleanStrictOrNull() ?: return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, "Trạng thái đích không hợp lệ")
+        if (!context.packages.isInstalled(plan.packageName) || plan.before.value !is SnapshotValue.Present) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, t("Ứng dụng hoặc bản sao lưu không hợp lệ", "Invalid app or backup"))
+        val add = plan.desired.toBooleanStrictOrNull() ?: return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, t("Trạng thái đích không hợp lệ", "Invalid target state"))
         val result = context.executor.execute(command((if (add) "+" else "-") + plan.packageName))
         if (!result.successful) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, result.stderr.ifBlank { "apply failed" })
         val verified = verify(context, plan)
-        return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) "Đã áp dụng và xác minh" else "Trạng thái đọc lại không khớp", verified)
+        return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) t("Đã áp dụng và xác minh", "Applied and verified") else t("Trạng thái đọc lại không khớp", "Read-back state does not match"), verified)
     }
     override suspend fun verify(context: OperationContext, plan: OperationPlan) = (read(context, plan.packageName).value as? SnapshotValue.Present)?.raw == plan.desired
     override suspend fun rollback(context: OperationContext, snapshot: OperationSnapshot): OperationResult {
         val original = (snapshot.value as? SnapshotValue.Present)?.raw?.toBooleanStrictOrNull() ?: return OperationResult(id, ResultStatus.ROLLBACK_FAILED, "Original state unreadable")
         val current = (read(context, snapshot.packageName).value as? SnapshotValue.Present)?.raw?.toBooleanStrictOrNull()
-        if (current == original) return OperationResult(id, ResultStatus.ROLLED_BACK, "Đã ở trạng thái ban đầu", true)
+        if (current == original) return OperationResult(id, ResultStatus.ROLLED_BACK, t("Đã ở trạng thái ban đầu", "Already in the original state"), true)
         val result = context.executor.execute(command((if (original) "+" else "-") + snapshot.packageName))
         val restored = result.successful && (read(context, snapshot.packageName).value as? SnapshotValue.Present)?.raw == original.toString()
-        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) "Đã khôi phục chính xác" else "Khôi phục thất bại", restored)
+        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) t("Đã khôi phục chính xác", "Restored exactly") else t("Khôi phục thất bại", "Restore failed"), restored)
     }
 }
 
@@ -120,17 +121,17 @@ class AppOpsOperation(private val op: String = "RUN_ANY_IN_BACKGROUND", override
     }
     override fun plan(current: OperationSnapshot, desired: String) = OperationPlan(id, current.packageName, current, desired, riskLevel)
     override suspend fun apply(context: OperationContext, plan: OperationPlan): OperationResult {
-        if (plan.before.value !is SnapshotValue.Present || plan.desired !in modes || !context.packages.isInstalled(plan.packageName)) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, "Không có bản sao lưu hợp lệ")
+        if (plan.before.value !is SnapshotValue.Present || plan.desired !in modes || !context.packages.isInstalled(plan.packageName)) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, t("Không có bản sao lưu hợp lệ", "No valid backup"))
         val result = context.executor.execute(PrivilegedCommand("$id.set", listOf("cmd", "appops", "set", plan.packageName, op, plan.desired)))
         if (!result.successful) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, result.stderr.ifBlank { "apply failed" })
-        val verified = verify(context, plan); return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) "Đã áp dụng và xác minh" else "Trạng thái đọc lại không khớp", verified)
+        val verified = verify(context, plan); return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) t("Đã áp dụng và xác minh", "Applied and verified") else t("Trạng thái đọc lại không khớp", "Read-back state does not match"), verified)
     }
     override suspend fun verify(context: OperationContext, plan: OperationPlan) = (read(context, plan.packageName).value as? SnapshotValue.Present)?.raw == plan.desired
     override suspend fun rollback(context: OperationContext, snapshot: OperationSnapshot): OperationResult {
         val mode = (snapshot.value as? SnapshotValue.Present)?.raw?.takeIf { it in modes } ?: return OperationResult(id, ResultStatus.ROLLBACK_FAILED, "Original mode unreadable")
         val result = context.executor.execute(PrivilegedCommand("$id.restore", listOf("cmd", "appops", "set", snapshot.packageName, op, mode)))
         val restored = result.successful && (read(context, snapshot.packageName).value as? SnapshotValue.Present)?.raw == mode
-        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) "Đã khôi phục chính xác chế độ" else "Khôi phục thất bại", restored)
+        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) t("Đã khôi phục chính xác chế độ", "Mode restored exactly") else t("Khôi phục thất bại", "Restore failed"), restored)
     }
 }
 
@@ -157,12 +158,12 @@ class StandbyBucketOperation : ReversibleOperation {
     override fun plan(current: OperationSnapshot, desired: String) = OperationPlan(id, current.packageName, current, desired, riskLevel)
 
     override suspend fun apply(context: OperationContext, plan: OperationPlan): OperationResult {
-        if (plan.before.value !is SnapshotValue.Present || plan.desired != "10") return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, "Không có bản sao lưu hợp lệ")
-        if (plan.before.value.raw == "5") return OperationResult(id, ResultStatus.APPLIED_VERIFIED, "Đã được miễn trừ; giữ nguyên mức ưu tiên cao hơn", true)
+        if (plan.before.value !is SnapshotValue.Present || plan.desired != "10") return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, t("Không có bản sao lưu hợp lệ", "No valid backup"))
+        if (plan.before.value.raw == "5") return OperationResult(id, ResultStatus.APPLIED_VERIFIED, t("Đã được miễn trừ; giữ nguyên mức ưu tiên cao hơn", "Already exempted; kept the higher priority"), true)
         val result = context.executor.execute(PrivilegedCommand("$id.set", listOf("am", "set-standby-bucket", plan.packageName, "active")))
         if (!result.successful) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, result.stderr.ifBlank { "apply failed" })
         val verified = verify(context, plan)
-        return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) "Đã xác minh mức ưu tiên hoạt động" else "Trạng thái đọc lại không khớp", verified)
+        return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) t("Đã xác minh mức ưu tiên hoạt động", "Active priority verified") else t("Trạng thái đọc lại không khớp", "Read-back state does not match"), verified)
     }
 
     override suspend fun verify(context: OperationContext, plan: OperationPlan) =
@@ -173,7 +174,7 @@ class StandbyBucketOperation : ReversibleOperation {
             ?: return OperationResult(id, ResultStatus.ROLLBACK_FAILED, "Original bucket unreadable")
         val result = context.executor.execute(PrivilegedCommand("$id.restore", listOf("am", "set-standby-bucket", snapshot.packageName, original)))
         val restored = result.successful && (read(context, snapshot.packageName).value as? SnapshotValue.Present)?.raw == original
-        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) "Đã khôi phục chính xác mức ưu tiên" else "Khôi phục thất bại", restored)
+        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) t("Đã khôi phục chính xác mức ưu tiên", "Priority restored exactly") else t("Khôi phục thất bại", "Restore failed"), restored)
     }
 }
 
@@ -196,11 +197,11 @@ class InactiveOperation : ReversibleOperation {
     override fun plan(current: OperationSnapshot, desired: String) = OperationPlan(id, current.packageName, current, desired, riskLevel)
 
     override suspend fun apply(context: OperationContext, plan: OperationPlan): OperationResult {
-        if (plan.before.value !is SnapshotValue.Present || plan.desired != "false") return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, "Không có bản sao lưu hợp lệ")
+        if (plan.before.value !is SnapshotValue.Present || plan.desired != "false") return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, t("Không có bản sao lưu hợp lệ", "No valid backup"))
         val result = context.executor.execute(PrivilegedCommand("$id.set", listOf("am", "set-inactive", plan.packageName, "false")))
         if (!result.successful) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, result.stderr.ifBlank { "apply failed" })
         val verified = verify(context, plan)
-        return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) "Đã xóa trạng thái không hoạt động" else "Trạng thái đọc lại không khớp", verified)
+        return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) t("Đã xóa trạng thái không hoạt động", "Inactive state cleared") else t("Trạng thái đọc lại không khớp", "Read-back state does not match"), verified)
     }
 
     override suspend fun verify(context: OperationContext, plan: OperationPlan) =
@@ -211,7 +212,7 @@ class InactiveOperation : ReversibleOperation {
             ?: return OperationResult(id, ResultStatus.ROLLBACK_FAILED, "Original state unreadable")
         val result = context.executor.execute(PrivilegedCommand("$id.restore", listOf("am", "set-inactive", snapshot.packageName, original.toString())))
         val restored = result.successful && (read(context, snapshot.packageName).value as? SnapshotValue.Present)?.raw == original.toString()
-        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) "Đã khôi phục chính xác trạng thái hoạt động" else "Khôi phục thất bại", restored)
+        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) t("Đã khôi phục chính xác trạng thái hoạt động", "Activity state restored exactly") else t("Khôi phục thất bại", "Restore failed"), restored)
     }
 }
 
@@ -237,7 +238,7 @@ class NetworkPolicyWhitelistOperation : ReversibleOperation {
 
     override suspend fun read(context: OperationContext, packageName: String): OperationSnapshot {
         if (!context.packages.isInstalled(packageName)) return OperationSnapshot(id, packageName, SnapshotValue.Unsupported("Package not installed"))
-        val value = listed(context, packageName) ?: return OperationSnapshot(id, packageName, SnapshotValue.Unreadable("Không đọc được whitelist dữ liệu nền"))
+        val value = listed(context, packageName) ?: return OperationSnapshot(id, packageName, SnapshotValue.Unreadable(t("Không đọc được whitelist dữ liệu nền", "Could not read the background data whitelist")))
         return OperationSnapshot(id, packageName, SnapshotValue.Present(value.toString()))
     }
 
@@ -251,19 +252,19 @@ class NetworkPolicyWhitelistOperation : ReversibleOperation {
 
     override suspend fun apply(context: OperationContext, plan: OperationPlan): OperationResult {
         val desired = plan.desired.toBooleanStrictOrNull()
-            ?: return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, "Trạng thái đích không hợp lệ")
-        if (plan.before.value !is SnapshotValue.Present || !write(context, plan.packageName, desired)) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, "Không thể đổi whitelist dữ liệu nền")
+            ?: return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, t("Trạng thái đích không hợp lệ", "Invalid target state"))
+        if (plan.before.value !is SnapshotValue.Present || !write(context, plan.packageName, desired)) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, t("Không thể đổi whitelist dữ liệu nền", "Could not change the background data whitelist"))
         val verified = verify(context, plan)
-        return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) "Đã xác minh dữ liệu nền" else "UID hoặc trạng thái đọc lại không khớp", verified)
+        return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) t("Đã xác minh dữ liệu nền", "Background data verified") else t("UID hoặc trạng thái đọc lại không khớp", "UID or read-back state does not match"), verified)
     }
 
     override suspend fun verify(context: OperationContext, plan: OperationPlan) = listed(context, plan.packageName)?.toString() == plan.desired
 
     override suspend fun rollback(context: OperationContext, snapshot: OperationSnapshot): OperationResult {
         val original = (snapshot.value as? SnapshotValue.Present)?.raw?.toBooleanStrictOrNull()
-            ?: return OperationResult(id, ResultStatus.ROLLBACK_FAILED, "Không đọc được trạng thái dữ liệu nền ban đầu")
+            ?: return OperationResult(id, ResultStatus.ROLLBACK_FAILED, t("Không đọc được trạng thái dữ liệu nền ban đầu", "Could not read the original background data state"))
         val restored = write(context, snapshot.packageName, original) && listed(context, snapshot.packageName) == original
-        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) "Đã khôi phục whitelist dữ liệu nền" else "Khôi phục whitelist dữ liệu nền thất bại", restored)
+        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) t("Đã khôi phục whitelist dữ liệu nền", "Background data whitelist restored") else t("Khôi phục whitelist dữ liệu nền thất bại", "Restoring the background data whitelist failed"), restored)
     }
 }
 
@@ -281,29 +282,29 @@ class GlobalSettingOperation(
 
     override suspend fun read(context: OperationContext, packageName: String): OperationSnapshot {
         val result = context.executor.execute(get())
-        return OperationSnapshot(id, deviceTarget, if (result.successful) SnapshotValue.Present(result.stdout.trim()) else SnapshotValue.Unreadable(result.stderr.ifBlank { "Không đọc được $key" }))
+        return OperationSnapshot(id, deviceTarget, if (result.successful) SnapshotValue.Present(result.stdout.trim()) else SnapshotValue.Unreadable(result.stderr.ifBlank { t("Không đọc được $key", "Could not read $key") }))
     }
 
     override fun plan(current: OperationSnapshot, desired: String) = OperationPlan(id, deviceTarget, current, desired, riskLevel)
 
     override suspend fun apply(context: OperationContext, plan: OperationPlan): OperationResult {
-        if (plan.before.value !is SnapshotValue.Present || plan.desired != target) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, "Không có bản sao lưu global hợp lệ")
+        if (plan.before.value !is SnapshotValue.Present || plan.desired != target) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, t("Không có bản sao lưu global hợp lệ", "No valid global backup"))
         val result = context.executor.execute(PrivilegedCommand("$id.set", listOf("settings", "put", "global", key, target)))
-        if (!result.successful) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, result.stderr.ifBlank { "Không thể thay đổi $key" })
+        if (!result.successful) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, result.stderr.ifBlank { t("Không thể thay đổi $key", "Could not change $key") })
         val verified = verify(context, plan)
-        return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) "Đã xác minh thiết lập toàn hệ thống" else "Trạng thái global đọc lại không khớp", verified)
+        return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) t("Đã xác minh thiết lập toàn hệ thống", "System-wide setting verified") else t("Trạng thái global đọc lại không khớp", "Global read-back does not match"), verified)
     }
 
     override suspend fun verify(context: OperationContext, plan: OperationPlan) = (read(context, deviceTarget).value as? SnapshotValue.Present)?.raw == target
 
     override suspend fun rollback(context: OperationContext, snapshot: OperationSnapshot): OperationResult {
         val original = (snapshot.value as? SnapshotValue.Present)?.raw
-            ?: return OperationResult(id, ResultStatus.ROLLBACK_FAILED, "Không có giá trị global ban đầu")
+            ?: return OperationResult(id, ResultStatus.ROLLBACK_FAILED, t("Không có giá trị global ban đầu", "No original global value"))
         val args = if (original == "null" || original.isBlank()) listOf("settings", "delete", "global", key) else listOf("settings", "put", "global", key, original)
         val result = context.executor.execute(PrivilegedCommand("$id.restore", args))
         val now = (read(context, deviceTarget).value as? SnapshotValue.Present)?.raw
         val restored = result.successful && if (original == "null" || original.isBlank()) now == "null" else now == original
-        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) "Đã khôi phục thiết lập toàn hệ thống" else "Khôi phục $key thất bại", restored)
+        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) t("Đã khôi phục thiết lập toàn hệ thống", "System-wide setting restored") else t("Khôi phục $key thất bại", "Restoring $key failed"), restored)
     }
 }
 
@@ -330,20 +331,20 @@ class GreezerGmsLimitOperation : ReversibleOperation {
     override fun plan(current: OperationSnapshot, desired: String) = OperationPlan(id, current.packageName, current, desired, riskLevel)
 
     override suspend fun apply(context: OperationContext, plan: OperationPlan): OperationResult {
-        if (plan.before.value !is SnapshotValue.Present || plan.desired !in setOf("true", "false")) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, "Không có bản sao lưu hợp lệ")
+        if (plan.before.value !is SnapshotValue.Present || plan.desired !in setOf("true", "false")) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, t("Không có bản sao lưu hợp lệ", "No valid backup"))
         val result = context.executor.execute(set(if (plan.desired == "true") "enable" else "disable"))
-        if (!result.successful) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, result.stderr.ifBlank { "dumpsys greezer thất bại" })
+        if (!result.successful) return OperationResult(id, ResultStatus.FAILED_BEFORE_CHANGE, result.stderr.ifBlank { t("dumpsys greezer thất bại", "dumpsys greezer failed") })
         val verified = verify(context, plan)
-        return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) "Đã tắt bộ giới hạn GMS (mất sau khi khởi động lại)" else "Trạng thái đọc lại không khớp", verified)
+        return OperationResult(id, if (verified) ResultStatus.APPLIED_VERIFIED else ResultStatus.VERIFICATION_FAILED, if (verified) t("Đã tắt bộ giới hạn GMS (mất sau khi khởi động lại)", "GMS limiter turned off (lost after a reboot)") else t("Trạng thái đọc lại không khớp", "Read-back state does not match"), verified)
     }
 
     override suspend fun verify(context: OperationContext, plan: OperationPlan) = (read(context, plan.packageName).value as? SnapshotValue.Present)?.raw == plan.desired
 
     override suspend fun rollback(context: OperationContext, snapshot: OperationSnapshot): OperationResult {
-        val original = (snapshot.value as? SnapshotValue.Present)?.raw ?: return OperationResult(id, ResultStatus.ROLLBACK_FAILED, "Không có trạng thái Greezer ban đầu")
+        val original = (snapshot.value as? SnapshotValue.Present)?.raw ?: return OperationResult(id, ResultStatus.ROLLBACK_FAILED, t("Không có trạng thái Greezer ban đầu", "No original Greezer state"))
         context.executor.execute(set(if (original == "true") "enable" else "disable"))
         val restored = (read(context, snapshot.packageName).value as? SnapshotValue.Present)?.raw == original
-        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) "Đã khôi phục Greezer" else "Khởi động lại máy để khôi phục Greezer", restored)
+        return OperationResult(id, if (restored) ResultStatus.ROLLED_BACK else ResultStatus.ROLLBACK_FAILED, if (restored) t("Đã khôi phục Greezer", "Greezer restored") else t("Khởi động lại máy để khôi phục Greezer", "Reboot the phone to restore Greezer"), restored)
     }
 }
 
@@ -379,11 +380,11 @@ object InactiveParser {
 
 class OperationTransaction(private val context: OperationContext, private val operations: Map<String, ReversibleOperation>) {
     suspend fun apply(plans: List<OperationPlan>, backup: suspend (List<OperationSnapshot>) -> Boolean): List<OperationResult> {
-        if (!backup(plans.map { it.before })) return plans.map { OperationResult(it.operationId, ResultStatus.FAILED_BEFORE_CHANGE, "Sao lưu thất bại", packageName = it.packageName) }
+        if (!backup(plans.map { it.before })) return plans.map { OperationResult(it.operationId, ResultStatus.FAILED_BEFORE_CHANGE, t("Sao lưu thất bại", "Backup failed"), packageName = it.packageName) }
         val results = mutableListOf<OperationResult>(); val applied = mutableListOf<OperationPlan>()
         for (plan in plans) {
             val operation = operations[plan.operationId]
-            if (operation == null) { results += OperationResult(plan.operationId, ResultStatus.UNSUPPORTED, "Thao tác không xác định", packageName = plan.packageName); continue }
+            if (operation == null) { results += OperationResult(plan.operationId, ResultStatus.UNSUPPORTED, t("Thao tác không xác định", "Unknown operation"), packageName = plan.packageName); continue }
             val result = operation.apply(context, plan).copy(packageName = plan.packageName); results += result
             if (result.status == ResultStatus.APPLIED_VERIFIED) applied += plan else {
                 if (result.status == ResultStatus.VERIFICATION_FAILED) results += operation.rollback(context, plan.before).copy(packageName = plan.packageName)

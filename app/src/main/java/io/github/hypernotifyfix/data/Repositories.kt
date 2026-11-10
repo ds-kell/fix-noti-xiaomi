@@ -1,5 +1,6 @@
 package io.github.hypernotifyfix.data
 
+import io.github.hypernotifyfix.core.t
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -123,14 +124,14 @@ class BackgroundMaintenanceStore(context: Context) {
     }
 
     fun reapply(reason: String = "app"): Boolean {
-        if (packages().isEmpty()) return record(false, "Chưa có ứng dụng cần duy trì")
+        if (packages().isEmpty()) return record(false, t("Chưa có ứng dụng cần duy trì", "No apps to maintain yet"))
         val required = requiredPackages()
         if (helper.isInstalled()) {
             // configure() also runs the protection pass and re-arms the helper's MILLET watcher.
-            helper.configure(required)?.let { status -> return record(status.lastSuccess, status.lastResult ?: "Helper không trả kết quả") }
+            helper.configure(required)?.let { status -> return record(status.lastSuccess, status.lastResult ?: t("Helper không trả kết quả", "The helper returned no result")) }
             // Writing directly would only hit the targetSdk block the helper exists to avoid.
             GmsSignals.refreshAll(context)
-            return record(false, "HyperOS chặn khởi chạy MILLET helper; mở app khi Shizuku đang chạy để cấp lại quyền tự khởi chạy")
+            return record(false, t("HyperOS chặn khởi chạy MILLET helper; mở app khi Shizuku đang chạy để cấp lại quyền tự khởi chạy", "HyperOS blocked the MILLET helper from starting; open the app while Shizuku is running to grant autostart again"))
         }
         GmsSignals.refreshAll(context)
         return reapplyDirect(required, reason)
@@ -138,31 +139,31 @@ class BackgroundMaintenanceStore(context: Context) {
 
     /** Fallback without the helper: works only where HyperOS still accepts the write from a modern targetSdk. */
     private fun reapplyDirect(required: Set<String>, reason: String): Boolean {
-        if (!canWrite()) return record(false, "Chưa có quyền sửa cài đặt hệ thống")
+        if (!canWrite()) return record(false, t("Chưa có quyền sửa cài đặt hệ thống", "No permission to modify system settings yet"))
         var healthyKeys = 0
         var repairedKeys = 0
         for (key in keys) {
             val current = runCatching { Settings.System.getString(context.contentResolver, key) }
-                .getOrElse { return record(false, "HyperOS không cho đọc khóa $key") }
+                .getOrElse { return record(false, t("HyperOS không cho đọc khóa $key", "HyperOS does not allow reading $key")) }
             when (val decision = WhitelistRepair.plan(current, prefs.getString("last_good_$key", null), required)) {
                 WhitelistRepair.Decision.Absent -> continue
-                is WhitelistRepair.Decision.Refuse -> return record(false, "Định dạng $key không an toàn")
+                is WhitelistRepair.Decision.Refuse -> return record(false, t("Định dạng $key không an toàn", "Unsafe format for $key"))
                 is WhitelistRepair.Decision.Unchanged -> { rememberLastGood(key, decision.healthy); healthyKeys++ }
                 is WhitelistRepair.Decision.Write -> {
                     val written = runCatching { Settings.System.putString(context.contentResolver, key, decision.value) }
-                        .getOrElse { return record(false, "HyperOS chặn ghi khóa $key với targetSdk hiện đại; hãy cài MILLET helper") }
+                        .getOrElse { return record(false, t("HyperOS chặn ghi khóa $key với targetSdk hiện đại; hãy cài MILLET helper", "HyperOS blocks writing $key from a modern targetSdk; install the MILLET helper")) }
                     val readBack = runCatching { Settings.System.getString(context.contentResolver, key) }
-                        .getOrElse { return record(false, "Đã ghi nhưng HyperOS chặn đọc lại khóa $key") }
-                    if (!written || !WhitelistRepair.containsAll(readBack, required)) return record(false, "Không xác minh được $key sau khi ghi")
+                        .getOrElse { return record(false, t("Đã ghi nhưng HyperOS chặn đọc lại khóa $key", "Written, but HyperOS blocks reading $key back")) }
+                    if (!written || !WhitelistRepair.containsAll(readBack, required)) return record(false, t("Không xác minh được $key sau khi ghi", "Could not verify $key after writing"))
                     rememberLastGood(key, readBack!!)
                     healthyKeys++; repairedKeys++
                 }
             }
         }
         return record(healthyKeys > 0, when {
-            healthyKeys == 0 -> "ROM không cung cấp whitelist Xiaomi có thể ghi"
-            repairedKeys > 0 -> "Đã tự phục hồi $repairedKeys whitelist nền Xiaomi ($reason)"
-            else -> "Whitelist Xiaomi vẫn đầy đủ ($reason)"
+            healthyKeys == 0 -> t("ROM không cung cấp whitelist Xiaomi có thể ghi", "The ROM has no writable Xiaomi whitelist")
+            repairedKeys > 0 -> t("Đã tự phục hồi $repairedKeys whitelist nền Xiaomi ($reason)", "Repaired $repairedKeys Xiaomi background whitelists ($reason)")
+            else -> t("Whitelist Xiaomi vẫn đầy đủ ($reason)", "Xiaomi whitelists still complete ($reason)")
         })
     }
 

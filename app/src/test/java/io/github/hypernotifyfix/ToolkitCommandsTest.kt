@@ -37,7 +37,7 @@ class ToolkitCommandsTest {
         val core = setOf("com.miui.home", "com.android.systemui", "com.android.settings", "com.miui.securitycenter", "com.android.phone",
             "com.google.android.gms", "com.miui.voiceassist", "com.android.contacts", "com.android.mms", "com.miui.powerkeeper", "com.xiaomi.xmsf")
         assertTrue(names.none { it in core })
-        assertTrue(DebloatCatalog.entries.filter { it.safety == Safety.CAUTION }.all { !it.note.isNullOrBlank() })
+        assertTrue(DebloatCatalog.entries.filter { it.safety == Safety.CAUTION }.all { it.note != null && it.note.vi.isNotBlank() && it.note.en.isNotBlank() })
     }
 
     @Test fun presetsHaveValidPackageNames() =

@@ -1,5 +1,6 @@
 package io.github.hypernotifyfix.toolkit
 
+import io.github.hypernotifyfix.core.t
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -82,11 +83,11 @@ class ToolkitViewModel(private val container: AppContainer) : ViewModel() {
         for (pkg in targets) {
             val result = runCatching { container.executor.execute(if (remove) ToolkitCommands.remove(pkg) else ToolkitCommands.restore(pkg)) }.getOrNull()
             val installedNow = runCatching { pm.getApplicationInfo(pkg, PackageManager.MATCH_UNINSTALLED_PACKAGES).flags and ApplicationInfo.FLAG_INSTALLED != 0 }.getOrDefault(false)
-            if (result?.successful == true && installedNow != remove) ok++ else failed += DebloatCatalog.byPackage[pkg]?.label ?: pkg
+            if (result?.successful == true && installedNow != remove) ok++ else failed += DebloatCatalog.byPackage[pkg]?.label?.toString() ?: pkg
         }
-        val verb = if (remove) "Đã gỡ" else "Đã khôi phục"
+        val verb = if (remove) t("Đã gỡ", "Removed") else t("Đã khôi phục", "Restored")
         mutable.update {
-            it.copy(busy = false, debloat = readDebloat(), message = if (failed.isEmpty()) "$verb $ok app" else "$verb $ok app; lỗi: ${failed.joinToString()}")
+            it.copy(busy = false, debloat = readDebloat(), message = if (failed.isEmpty()) "$verb $ok app" else t("$verb $ok app; lỗi: ${failed.joinToString()}", "$verb $ok apps; failed: ${failed.joinToString()}"))
         }
     }
 
@@ -96,8 +97,8 @@ class ToolkitViewModel(private val container: AppContainer) : ViewModel() {
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         val browser = Intent(Intent.ACTION_VIEW, Uri.parse("http://example.com")).addCategory(Intent.CATEGORY_BROWSABLE)
         return listOf(
-            DefaultAppRole(ToolkitCommands.ROLE_BROWSER, "Trình duyệt", currentDefault(browser), choices(browser)),
-            DefaultAppRole(ToolkitCommands.ROLE_HOME, "Màn hình chính (launcher)", currentDefault(home), choices(home)),
+            DefaultAppRole(ToolkitCommands.ROLE_BROWSER, t("Trình duyệt", "Browser"), currentDefault(browser), choices(browser)),
+            DefaultAppRole(ToolkitCommands.ROLE_HOME, t("Màn hình chính (launcher)", "Home screen (launcher)"), currentDefault(home), choices(home)),
         )
     }
 
@@ -120,7 +121,7 @@ class ToolkitViewModel(private val container: AppContainer) : ViewModel() {
         val ok = results.lastOrNull()?.successful == true && packageName in nowHolders
         val label = roleInfo.choices.first { it.packageName == packageName }.label
         mutable.update {
-            it.copy(busy = false, roles = readRoles(), message = if (ok) "${roleInfo.title}: đã đặt $label" else "Không đặt được $label, hãy thử trong Cài đặt hệ thống")
+            it.copy(busy = false, roles = readRoles(), message = if (ok) t("${roleInfo.title}: đã đặt $label", "${roleInfo.title}: set to $label") else t("Không đặt được $label, hãy thử trong Cài đặt hệ thống", "Could not set $label; try in the system Settings"))
         }
     }
 
@@ -145,21 +146,21 @@ class ToolkitViewModel(private val container: AppContainer) : ViewModel() {
         if (canWriteSecure()) {
             val resolver = context.contentResolver
             val done = ToolkitCommands.BANK_SAFE_SETTINGS.all { runCatching { Settings.Global.putInt(resolver, it, 0) }.getOrDefault(false) }
-            mutable.update { it.copy(bankSafe = readBankSafe(), message = if (done) "Đã tắt Tùy chọn nhà phát triển. App ngân hàng có thể mở bình thường" else "Chưa tắt hết, hãy tắt tay trong Cài đặt") }
+            mutable.update { it.copy(bankSafe = readBankSafe(), message = if (done) t("Đã tắt Tùy chọn nhà phát triển. App ngân hàng có thể mở bình thường", "Developer options are off. Banking apps can open normally") else t("Chưa tắt hết, hãy tắt tay trong Cài đặt", "Not everything was turned off; turn it off by hand in Settings")) }
             return done
         }
         if (!state.value.shizukuReady) return false
         viewModelScope.launch {
             // adb going down takes Shizuku with it, so the command may never report back.
             runCatching { container.executor.execute(ToolkitCommands.bankSafe()) }
-            mutable.update { it.copy(shizukuReady = false, bankSafe = readBankSafe(), message = "Đã tắt Tùy chọn nhà phát triển. Shizuku sẽ dừng, các thiết lập đã áp dụng vẫn giữ nguyên") }
+            mutable.update { it.copy(shizukuReady = false, bankSafe = readBankSafe(), message = t("Đã tắt Tùy chọn nhà phát triển. Shizuku sẽ dừng, các thiết lập đã áp dụng vẫn giữ nguyên", "Developer options are off. Shizuku will stop; everything applied stays")) }
         }
         return true
     }
 
     private fun requireShizuku(): Boolean {
         if (state.value.shizukuReady) return true
-        mutable.update { it.copy(message = "Cần Shizuku đang chạy: bật Gỡ lỗi không dây, khởi động Shizuku rồi mở lại tab này") }
+        mutable.update { it.copy(message = t("Cần Shizuku đang chạy: bật Gỡ lỗi không dây, khởi động Shizuku rồi mở lại tab này", "Needs Shizuku running: turn on Wireless debugging, start Shizuku, then reopen this tab")) }
         return false
     }
 }

@@ -1,5 +1,6 @@
 package io.github.hypernotifyfix.core.system
 
+import io.github.hypernotifyfix.core.t
 import android.app.Activity
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -30,7 +31,7 @@ object FcmProbe {
 
     suspend fun status(context: Context): FcmStatus {
         val app = context.applicationContext
-        val raw = withTimeoutOrNull(3_000) { request(app) } ?: return FcmStatus(FcmState.UNKNOWN, null, "GMS không phản hồi")
+        val raw = withTimeoutOrNull(3_000) { request(app) } ?: return FcmStatus(FcmState.UNKNOWN, null, t("GMS không phản hồi", "GMS did not respond"))
         return FcmStatus(if (raw == "3") FcmState.DISCONNECTED else FcmState.CONNECTED, raw)
     }
 

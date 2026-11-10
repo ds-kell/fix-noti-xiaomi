@@ -1,5 +1,6 @@
 package io.github.hypernotifyfix.toolkit
 
+import io.github.hypernotifyfix.core.t
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.provider.Settings
@@ -44,13 +45,13 @@ fun ToolkitScreen(vm: ToolkitViewModel, installed: Set<String>, onPreset: (KeepA
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Column(Modifier.padding(bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Công cụ HyperOS", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text("Gỡ app rác, tắt quảng cáo, đổi app mặc định. Không cần root, mọi thứ hoàn tác được.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(t("Công cụ HyperOS", "HyperOS tools"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text(t("Gỡ app rác, tắt quảng cáo, đổi app mặc định. Không cần root, mọi thứ hoàn tác được.", "Remove bloatware, turn off ads, change default apps. No root, and everything can be undone."), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (state.busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         if (!state.shizukuReady && !state.loading) item {
-            Note(Icons.Outlined.Info, Indigo, "Shizuku chưa chạy", "Xem được trạng thái, nhưng muốn gỡ, khôi phục hay đổi mặc định thì cần khởi động Shizuku (Trang chủ). Làm xong thì bật chế độ an toàn cho app ngân hàng ở dưới.")
+            Note(Icons.Outlined.Info, Indigo, t("Shizuku chưa chạy", "Shizuku is not running"), t("Xem được trạng thái, nhưng muốn gỡ, khôi phục hay đổi mặc định thì cần khởi động Shizuku (Trang chủ). Làm xong thì bật chế độ an toàn cho app ngân hàng ở dưới.", "You can see the status, but removing, restoring or changing defaults needs Shizuku (Home). When done, turn on bank-safe mode below."))
         }
         item { BankSafeCard(state, onTurnOff = { askBankSafe = true }, onOpen = { open(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }) }
 
@@ -63,7 +64,7 @@ fun ToolkitScreen(vm: ToolkitViewModel, installed: Set<String>, onPreset: (KeepA
             }
         }
         if (!state.loading && state.debloat.isEmpty()) item {
-            Note(Icons.Outlined.CheckCircle, Mint, "Không thấy app rác nào trong danh sách", "Máy này không có app nào trong danh mục, hoặc bạn đã gỡ hết.")
+            Note(Icons.Outlined.CheckCircle, Mint, t("Không thấy app rác nào trong danh sách", "No bloatware from the list found"), t("Máy này không có app nào trong danh mục, hoặc bạn đã gỡ hết.", "This phone has none of the listed apps, or you already removed them all."))
         }
 
         item { DefaultAppsCard(state, onPick = { picking = it }, onSystem = { vm.openDefaultAppsSettings(::open) }) }
@@ -75,17 +76,17 @@ fun ToolkitScreen(vm: ToolkitViewModel, installed: Set<String>, onPreset: (KeepA
         AlertDialog(
             onDismissRequest = { confirm = null },
             icon = { Icon(if (remove) Icons.Outlined.DeleteSweep else Icons.Outlined.Restore, null, tint = if (remove) Rose else Mint) },
-            title = { Text(if (remove) "Gỡ ${items.size} app?" else "Khôi phục ${items.size} app?") },
+            title = { Text(if (remove) t("Gỡ ${items.size} app?", "Remove ${items.size} apps?") else t("Khôi phục ${items.size} app?", "Restore ${items.size} apps?")) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(if (remove) "Gỡ cho người dùng hiện tại, dữ liệu được giữ lại. App hệ thống khôi phục được bằng một nút; app không phải hệ thống thì phải cài lại từ cửa hàng." else "Cài lại các app hệ thống đã gỡ từ bản có sẵn trong máy.", style = MaterialTheme.typography.bodySmall)
+                    Text(if (remove) t("Gỡ cho người dùng hiện tại, dữ liệu được giữ lại. App hệ thống khôi phục được bằng một nút; app không phải hệ thống thì phải cài lại từ cửa hàng.", "Removed for the current user, data is kept. System apps come back with one tap; other apps must be reinstalled from a store.") else t("Cài lại các app hệ thống đã gỡ từ bản có sẵn trong máy.", "Reinstalls the removed system apps from the copy already on the phone."), style = MaterialTheme.typography.bodySmall)
                     items.take(8).forEach { Text("• ${it.entry.label}", style = MaterialTheme.typography.bodySmall) }
-                    if (items.size > 8) Text("… và ${items.size - 8} app khác", style = MaterialTheme.typography.bodySmall)
+                    if (items.size > 8) Text(t("… và ${items.size - 8} app khác", "… and ${items.size - 8} more"), style = MaterialTheme.typography.bodySmall)
                     items.filter { it.entry.safety == Safety.CAUTION }.forEach { Text("⚠ ${it.entry.label}: ${it.entry.note}", style = MaterialTheme.typography.bodySmall, color = Amber) }
                 }
             },
-            confirmButton = { Button({ val pk = items.map { it.entry.packageName }; confirm = null; if (remove) vm.remove(pk) else vm.restore(pk) }) { Text(if (remove) "Gỡ" else "Khôi phục") } },
-            dismissButton = { TextButton({ confirm = null }) { Text("Hủy") } },
+            confirmButton = { Button({ val pk = items.map { it.entry.packageName }; confirm = null; if (remove) vm.remove(pk) else vm.restore(pk) }) { Text(if (remove) t("Gỡ", "Remove") else t("Khôi phục", "Restore")) } },
+            dismissButton = { TextButton({ confirm = null }) { Text(t("Hủy", "Cancel")) } },
         )
     }
 
@@ -95,7 +96,7 @@ fun ToolkitScreen(vm: ToolkitViewModel, installed: Set<String>, onPreset: (KeepA
             title = { Text(role.title) },
             text = {
                 Column {
-                    if (role.role == ToolkitCommands.ROLE_HOME) Text("HyperOS có thể tắt cử chỉ vuốt toàn màn hình với launcher bên thứ ba.", style = MaterialTheme.typography.bodySmall, color = Amber, modifier = Modifier.padding(bottom = 8.dp))
+                    if (role.role == ToolkitCommands.ROLE_HOME) Text(t("HyperOS có thể tắt cử chỉ vuốt toàn màn hình với launcher bên thứ ba.", "HyperOS may disable full-screen gestures with a third-party launcher."), style = MaterialTheme.typography.bodySmall, color = Amber, modifier = Modifier.padding(bottom = 8.dp))
                     role.choices.forEach { choice ->
                         Row(Modifier.fillMaxWidth().clickable { picking = null; vm.setDefault(role.role, choice.packageName) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                             RadioButton(selected = choice.packageName == role.current, onClick = null)
@@ -105,17 +106,17 @@ fun ToolkitScreen(vm: ToolkitViewModel, installed: Set<String>, onPreset: (KeepA
                     }
                 }
             },
-            confirmButton = { TextButton({ picking = null }) { Text("Đóng") } },
+            confirmButton = { TextButton({ picking = null }) { Text(t("Đóng", "Close")) } },
         )
     }
 
     if (askBankSafe) AlertDialog(
         onDismissRequest = { askBankSafe = false },
         icon = { Icon(Icons.Outlined.AccountBalance, null, tint = Mint) },
-        title = { Text("Bật chế độ an toàn cho app ngân hàng?") },
-        text = { Text("Tắt Gỡ lỗi USB, Gỡ lỗi không dây và Tùy chọn nhà phát triển. Shizuku sẽ dừng, nhưng mọi thứ đã áp dụng (sửa thông báo, app đã gỡ, trợ lý AI, app mặc định) vẫn giữ nguyên. Muốn thay đổi thêm thì bật lại Gỡ lỗi không dây và Shizuku.") },
-        confirmButton = { Button({ askBankSafe = false; if (!vm.enableBankSafe()) open(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }) { Text("Tắt ngay") } },
-        dismissButton = { TextButton({ askBankSafe = false }) { Text("Để sau") } },
+        title = { Text(t("Bật chế độ an toàn cho app ngân hàng?", "Turn on bank-safe mode?")) },
+        text = { Text(t("Tắt Gỡ lỗi USB, Gỡ lỗi không dây và Tùy chọn nhà phát triển. Shizuku sẽ dừng, nhưng mọi thứ đã áp dụng (sửa thông báo, app đã gỡ, trợ lý AI, app mặc định) vẫn giữ nguyên. Muốn thay đổi thêm thì bật lại Gỡ lỗi không dây và Shizuku.", "Turns off USB debugging, Wireless debugging and Developer options. Shizuku will stop, but everything already applied (notification fixes, removed apps, AI assistant, default apps) stays. To change more later, turn Wireless debugging and Shizuku back on.")) },
+        confirmButton = { Button({ askBankSafe = false; if (!vm.enableBankSafe()) open(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }) { Text(t("Tắt ngay", "Turn off now")) } },
+        dismissButton = { TextButton({ askBankSafe = false }) { Text(t("Để sau", "Later")) } },
     )
 
     LaunchedEffect(Unit) { vm.refresh() }
@@ -129,17 +130,17 @@ private fun BankSafeCard(state: ToolkitState, onTurnOff: () -> Unit, onOpen: () 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Icon(Icons.Outlined.AccountBalance, null, tint = color)
-                Text(if (status.safe) "App ngân hàng dùng được" else "App ngân hàng có thể bị chặn", fontWeight = FontWeight.Bold)
+                Text(if (status.safe) t("App ngân hàng dùng được", "Banking apps can run") else t("App ngân hàng có thể bị chặn", "Banking apps may be blocked"), fontWeight = FontWeight.Bold)
             }
-            if (status.safe) Text("Tùy chọn nhà phát triển đang tắt. Máy không root, các thay đổi vẫn giữ nguyên.", style = MaterialTheme.typography.bodySmall)
+            if (status.safe) Text(t("Tùy chọn nhà phát triển đang tắt. Máy không root, các thay đổi vẫn giữ nguyên.", "Developer options are off. The phone is not rooted and your changes stay in place."), style = MaterialTheme.typography.bodySmall)
             else {
-                Text("Nhiều app ngân hàng từ chối mở khi các mục này đang bật:", style = MaterialTheme.typography.bodySmall)
-                listOf("Tùy chọn nhà phát triển" to status.developerOptions, "Gỡ lỗi USB" to status.usbDebugging, "Gỡ lỗi không dây (Shizuku)" to status.wirelessDebugging)
-                    .filter { it.second }.forEach { Text("• ${it.first}: đang bật", style = MaterialTheme.typography.bodySmall) }
-                Text("Dùng xong công cụ thì tắt đi. Mọi thiết lập đã áp dụng vẫn được giữ.", style = MaterialTheme.typography.bodySmall)
+                Text(t("Nhiều app ngân hàng từ chối mở khi các mục này đang bật:", "Many banking apps refuse to open while these are on:"), style = MaterialTheme.typography.bodySmall)
+                listOf(t("Tùy chọn nhà phát triển", "Developer options") to status.developerOptions, t("Gỡ lỗi USB", "USB debugging") to status.usbDebugging, t("Gỡ lỗi không dây (Shizuku)", "Wireless debugging (Shizuku)") to status.wirelessDebugging)
+                    .filter { it.second }.forEach { Text(t("• ${it.first}: đang bật", "• ${it.first}: on"), style = MaterialTheme.typography.bodySmall) }
+                Text(t("Dùng xong công cụ thì tắt đi. Mọi thiết lập đã áp dụng vẫn được giữ.", "Turn them off when you are done. Everything applied is kept."), style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onTurnOff) { Text("Tắt ngay") }
-                    OutlinedButton(onOpen) { Text("Mở cài đặt") }
+                    Button(onTurnOff) { Text(t("Tắt ngay", "Turn off now")) }
+                    OutlinedButton(onOpen) { Text(t("Mở cài đặt", "Open settings")) }
                 }
             }
         }
@@ -158,35 +159,35 @@ private fun DebloatCard(group: DebloatGroup, items: List<DebloatItem>, busy: Boo
             Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Icon(icon, null, tint = Indigo)
                 Column(Modifier.weight(1f)) {
-                    Text(group.title, fontWeight = FontWeight.Bold)
-                    Text("${installed.size} đang có · ${removed.size} đã gỡ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(group.title.toString(), fontWeight = FontWeight.Bold)
+                    Text(t("${installed.size} đang có · ${removed.size} đã gỡ", "${installed.size} present · ${removed.size} removed"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null)
             }
-            Text(group.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(group.subtitle.toString(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             val safeInstalled = installed.filter { it.entry.safety == Safety.SAFE }
             if (!expanded) {
-                if (safeInstalled.isNotEmpty()) FilledTonalButton({ onRemove(safeInstalled) }, enabled = !busy) { Text("Gỡ ${safeInstalled.size} mục an toàn") }
+                if (safeInstalled.isNotEmpty()) FilledTonalButton({ onRemove(safeInstalled) }, enabled = !busy) { Text(t("Gỡ ${safeInstalled.size} mục an toàn", "Remove ${safeInstalled.size} safe items")) }
                 return@Column
             }
             items.forEach { item ->
                 val pkg = item.entry.packageName
                 Row(Modifier.fillMaxWidth().clickable(enabled = item.installed) { picked = if (pkg in picked) picked - pkg else picked + pkg }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (item.installed) Checkbox(checked = pkg in picked, onCheckedChange = null) else Icon(Icons.Outlined.CheckCircle, "Đã gỡ", tint = Mint, modifier = Modifier.size(24.dp))
+                    if (item.installed) Checkbox(checked = pkg in picked, onCheckedChange = null) else Icon(Icons.Outlined.CheckCircle, t("Đã gỡ", "Removed"), tint = Mint, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(item.entry.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Text(item.entry.label.toString(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                         Text(pkg, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         item.entry.note?.let { Text("⚠ $it", style = MaterialTheme.typography.labelSmall, color = Amber) }
-                        if (item.installed && !item.system) Text("Không phải app hệ thống: gỡ xong muốn dùng lại phải cài từ cửa hàng", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (item.installed && !item.system) Text(t("Không phải app hệ thống: gỡ xong muốn dùng lại phải cài từ cửa hàng", "Not a system app: after removing it, reinstall from a store to use it again"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    if (!item.installed) TextButton({ onRestore(listOf(item)) }, enabled = !busy) { Text("Khôi phục") }
+                    if (!item.installed) TextButton({ onRestore(listOf(item)) }, enabled = !busy) { Text(t("Khôi phục", "Restore")) }
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (picked.isNotEmpty()) Button({ onRemove(installed.filter { it.entry.packageName in picked }); picked = emptySet() }, enabled = !busy) { Text("Gỡ ${picked.size} app") }
-                else if (safeInstalled.isNotEmpty()) FilledTonalButton({ onRemove(safeInstalled) }, enabled = !busy) { Text("Gỡ ${safeInstalled.size} mục an toàn") }
-                if (removed.size > 1) OutlinedButton({ onRestore(removed) }, enabled = !busy) { Text("Khôi phục tất cả") }
+                if (picked.isNotEmpty()) Button({ onRemove(installed.filter { it.entry.packageName in picked }); picked = emptySet() }, enabled = !busy) { Text(t("Gỡ ${picked.size} app", "Remove ${picked.size} apps")) }
+                else if (safeInstalled.isNotEmpty()) FilledTonalButton({ onRemove(safeInstalled) }, enabled = !busy) { Text(t("Gỡ ${safeInstalled.size} mục an toàn", "Remove ${safeInstalled.size} safe items")) }
+                if (removed.size > 1) OutlinedButton({ onRestore(removed) }, enabled = !busy) { Text(t("Khôi phục tất cả", "Restore all")) }
             }
         }
     }
@@ -197,20 +198,20 @@ private fun DefaultAppsCard(state: ToolkitState, onPick: (DefaultAppRole) -> Uni
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Icons.Outlined.SwapHoriz, null, tint = Indigo)
-            Text("App mặc định", fontWeight = FontWeight.Bold)
+            Text(t("App mặc định", "Default apps"), fontWeight = FontWeight.Bold)
         }
-        Text("Đặt trình duyệt và launcher mặc định, kể cả khi HyperOS khoá lựa chọn. Trợ lý AI cho nút nguồn nằm ở tab Cài đặt.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(t("Đặt trình duyệt và launcher mặc định, kể cả khi HyperOS khoá lựa chọn. Trợ lý AI cho nút nguồn nằm ở tab Cài đặt.", "Set the default browser and launcher, even when HyperOS locks the choice. The power-key AI assistant is in the Settings tab."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         state.roles.forEach { role ->
-            val current = role.choices.firstOrNull { it.packageName == role.current }?.label ?: "Chưa chọn"
+            val current = role.choices.firstOrNull { it.packageName == role.current }?.label ?: t("Chưa chọn", "Not set")
             Row(Modifier.fillMaxWidth().clickable(enabled = role.choices.isNotEmpty() && !state.busy) { onPick(role) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(role.title, fontWeight = FontWeight.Medium)
                     Text(current, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text("Đổi", color = Indigo, fontWeight = FontWeight.SemiBold)
+                Text(t("Đổi", "Change"), color = Indigo, fontWeight = FontWeight.SemiBold)
             }
         }
-        TextButton(onSystem) { Text("Mở cài đặt app mặc định của hệ thống") }
+        TextButton(onSystem) { Text(t("Mở cài đặt app mặc định của hệ thống", "Open the system default apps settings")) }
     }
 }
 
@@ -219,17 +220,17 @@ private fun KeepAliveCard(installed: Set<String>, onPreset: (KeepAlivePreset, Li
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Icons.Outlined.Bolt, null, tint = Indigo)
-            Text("Giữ app chạy nền", fontWeight = FontWeight.Bold)
+            Text(t("Giữ app chạy nền", "Keep apps running in the background"), fontWeight = FontWeight.Bold)
         }
-        Text("Chọn nhanh nhóm app hay bị HyperOS tắt ngầm, rồi chẩn đoán và áp dụng như bình thường.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(t("Chọn nhanh nhóm app hay bị HyperOS tắt ngầm, rồi chẩn đoán và áp dụng như bình thường.", "Quickly select a group of apps HyperOS tends to kill, then diagnose and apply as usual."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         KeepAlivePresets.all.forEach { preset ->
             val present = preset.packages.filter { it in installed }
             Row(Modifier.fillMaxWidth().clickable(enabled = present.isNotEmpty()) { onPreset(preset, present) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(preset.title, fontWeight = FontWeight.Medium)
-                    Text(preset.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(preset.title.toString(), fontWeight = FontWeight.Medium)
+                    Text(preset.subtitle.toString(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text(if (present.isEmpty()) "Không có" else "Chọn ${present.size}", color = if (present.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else Indigo, fontWeight = FontWeight.SemiBold)
+                Text(if (present.isEmpty()) t("Không có", "None") else t("Chọn ${present.size}", "Select ${present.size}"), color = if (present.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else Indigo, fontWeight = FontWeight.SemiBold)
             }
         }
     }

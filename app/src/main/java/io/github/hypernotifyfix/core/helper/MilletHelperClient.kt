@@ -1,5 +1,6 @@
 package io.github.hypernotifyfix.core.helper
 
+import io.github.hypernotifyfix.core.t
 import android.content.Context
 import android.net.Uri
 import android.os.Build
@@ -47,10 +48,10 @@ class MilletHelperClient(context: Context) {
 
     /** Returns null on success, otherwise a user-facing error. */
     suspend fun install(executor: PrivilegedCommandExecutor): String? = withContext(Dispatchers.IO) {
-        if (!executor.isAvailable()) return@withContext "Cần Shizuku để cài helper"
+        if (!executor.isAvailable()) return@withContext t("Cần Shizuku để cài helper", "Shizuku is needed to install the helper")
         val source = runCatching {
             File(context.getExternalFilesDir(null), "millet-helper.apk").also { target -> context.assets.open("millet-helper.apk").use { input -> target.outputStream().use { input.copyTo(it) } } }
-        }.getOrElse { return@withContext "Không chuẩn bị được APK helper" }
+        }.getOrElse { return@withContext t("Không chuẩn bị được APK helper", "Could not prepare the helper APK") }
         // Stage in /data/local/tmp so the shell-side installer never depends on scoped-storage access.
         val staged = "/data/local/tmp/hypernotify-millet-helper.apk"
         val apk = if (executor.execute(PrivilegedCommand("helper.stage", listOf("cp", source.absolutePath, staged))).successful) staged else source.absolutePath
@@ -59,10 +60,10 @@ class MilletHelperClient(context: Context) {
         val result = executor.execute(PrivilegedCommand("helper.install", listOf("pm", "install", "-r") + bypass + apk, 30_000))
         executor.execute(PrivilegedCommand("helper.unstage", listOf("rm", "-f", staged)))
         source.delete()
-        if (!result.successful || !result.stdout.contains("Success")) return@withContext result.stderr.ifBlank { result.stdout }.ifBlank { "pm install thất bại" }
+        if (!result.successful || !result.stdout.contains("Success")) return@withContext result.stderr.ifBlank { result.stdout }.ifBlank { t("pm install thất bại", "pm install failed") }
         // SecurityCenter resets Autostart for new packages shortly after PACKAGE_ADDED; grant after it settles.
         repeat(3) { delay(1_500); if (ensureAccess(executor)) return@withContext null }
-        "Đã cài helper nhưng HyperOS chưa cho tự khởi chạy; mở lại app khi Shizuku đang chạy"
+        t("Đã cài helper nhưng HyperOS chưa cho tự khởi chạy; mở lại app khi Shizuku đang chạy", "Helper installed, but HyperOS has not allowed it to autostart; reopen the app while Shizuku is running")
     }
 
     /**
@@ -84,9 +85,9 @@ class MilletHelperClient(context: Context) {
     }
 
     suspend fun uninstall(executor: PrivilegedCommandExecutor): String? = withContext(Dispatchers.IO) {
-        if (!executor.isAvailable()) return@withContext "Cần Shizuku để gỡ helper"
+        if (!executor.isAvailable()) return@withContext t("Cần Shizuku để gỡ helper", "Shizuku is needed to remove the helper")
         val result = executor.execute(PrivilegedCommand("helper.uninstall", listOf("pm", "uninstall", PACKAGE)))
-        if (result.successful && result.stdout.contains("Success")) null else result.stderr.ifBlank { "pm uninstall thất bại" }
+        if (result.successful && result.stdout.contains("Success")) null else result.stderr.ifBlank { t("pm uninstall thất bại", "pm uninstall failed") }
     }
 
     companion object {

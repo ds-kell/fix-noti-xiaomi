@@ -1,5 +1,6 @@
 package io.github.hypernotifyfix.core.system
 
+import io.github.hypernotifyfix.core.t
 import android.Manifest
 import android.app.job.JobInfo
 import android.app.job.JobParameters
@@ -76,13 +77,13 @@ object AssistantGuard {
         val current = read(app, KEY_SERVICE)
         val unlocked = app.getSystemService(UserManager::class.java).isUserUnlocked
         val (success, message) = when (val decision = AssistantRepair.plan(current, read(app, KEY_ASSISTANT), availableServices(app), unlocked)) {
-            AssistantRepair.Decision.Healthy -> true to "Trợ lý vẫn đúng ($reason)"
+            AssistantRepair.Decision.Healthy -> true to t("Trợ lý vẫn đúng ($reason)", "Assistant still correct ($reason)")
             is AssistantRepair.Decision.Skip -> false to "${decision.reason} ($reason)"
             is AssistantRepair.Decision.Write -> when {
-                !isEnabled(app) -> false to "Chưa cấp WRITE_SECURE_SETTINGS"
+                !isEnabled(app) -> false to t("Chưa cấp WRITE_SECURE_SETTINGS", "WRITE_SECURE_SETTINGS not granted")
                 else -> runCatching { Settings.Secure.putString(app.contentResolver, KEY_SERVICE, decision.value) }.fold(
-                    onSuccess = { if (read(app, KEY_SERVICE) == decision.value) true to "Đã khôi phục dịch vụ trợ lý ($reason)" else false to "HyperOS không giữ giá trị vừa ghi" },
-                    onFailure = { false to "HyperOS chặn ghi dịch vụ trợ lý: ${it.javaClass.simpleName}" },
+                    onSuccess = { if (read(app, KEY_SERVICE) == decision.value) true to t("Đã khôi phục dịch vụ trợ lý ($reason)", "Assistant service restored ($reason)") else false to t("HyperOS không giữ giá trị vừa ghi", "HyperOS did not keep the value just written") },
+                    onFailure = { false to t("HyperOS chặn ghi dịch vụ trợ lý: ${it.javaClass.simpleName}", "HyperOS blocked writing the assistant service: ${it.javaClass.simpleName}") },
                 )
             }
         }
