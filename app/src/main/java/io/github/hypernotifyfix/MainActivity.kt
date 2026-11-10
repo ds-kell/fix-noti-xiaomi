@@ -620,27 +620,59 @@ private fun SettingsScreen(state: UiState, vm: MainViewModel, onAurogon: (Boolea
     }
 }
 
-/** Language picker: follow the phone, or force Vietnamese / English. Takes effect immediately. */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Language row in the same style as the other settings rows; tapping opens a picker.
+ * The title is always bilingual so someone who picked the wrong language can still find it.
+ */
 @Composable
-private fun LanguageCard(onChanged: () -> Unit) = Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) {
+private fun LanguageCard(onChanged: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    val systemName = if (java.util.Locale.getDefault().language == "vi") "Tiếng Việt" else "English"
+    data class Option(val language: AppLanguage, val name: String, val detail: String)
+    val options = listOf(
+        Option(AppLanguage.SYSTEM, t("Theo máy", "System default"), t("Đang là $systemName", "Currently $systemName")),
+        Option(AppLanguage.VI, "Tiếng Việt", "Vietnamese"),
+        Option(AppLanguage.EN, "English", "Tiếng Anh"),
+    )
+    val current = options.first { it.language == I18n.language }
+    Surface(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).clickable { open = true }, color = Color.White, shape = RoundedCornerShape(18.dp)) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Icon(Icons.Outlined.Translate, null, tint = Indigo)
-            Text(t("Ngôn ngữ", "Language"), fontWeight = FontWeight.SemiBold)
-        }
-        val options = listOf(AppLanguage.SYSTEM to t("Theo máy", "System"), AppLanguage.VI to "Tiếng Việt", AppLanguage.EN to "English")
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-            options.forEachIndexed { index, (language, label) ->
-                SegmentedButton(
-                    selected = I18n.language == language,
-                    onClick = { I18n.set(context, language); onChanged() },
-                    shape = SegmentedButtonDefaults.itemShape(index, options.size),
-                ) { Text(label, maxLines = 1) }
+            Column(Modifier.weight(1f)) {
+                Text("Ngôn ngữ · Language", fontWeight = FontWeight.Medium)
+                Text(if (current.language == AppLanguage.SYSTEM) "${current.name} · $systemName" else current.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+    if (open) AlertDialog(
+        onDismissRequest = { open = false },
+        icon = { Icon(Icons.Outlined.Translate, null, tint = Indigo) },
+        title = { Text("Ngôn ngữ · Language") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                options.forEach { option ->
+                    val selected = option.language == I18n.language
+                    Surface(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable { I18n.set(context, option.language); onChanged(); open = false },
+                        color = if (selected) Indigo.copy(alpha = .08f) else Color.Transparent,
+                        shape = RoundedCornerShape(14.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) Indigo.copy(alpha = .45f) else MaterialTheme.colorScheme.outline.copy(alpha = .5f)),
+                    ) {
+                        Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(option.name, fontWeight = FontWeight.SemiBold, color = if (selected) Indigo else MaterialTheme.colorScheme.onSurface)
+                                Text(option.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (selected) Icon(Icons.Filled.CheckCircle, null, tint = Indigo)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton({ open = false }) { Text(t("Đóng", "Close")) } },
+    )
 }
 
 @Composable
