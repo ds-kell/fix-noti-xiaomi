@@ -1,8 +1,10 @@
-# HyperNotifyFix — fix delayed notifications, remove bloatware & ads, pick your AI assistant on Xiaomi HyperOS (no root)
+# HyperOS Toolkit — fix delayed notifications, remove bloatware & ads, pick your AI assistant on Xiaomi HyperOS (no root)
 
-**Zalo, Messenger, Gmail, Telegram… notifications arriving late or only when you open the app?** HyperNotifyFix finds and fixes the HyperOS battery/background restrictions behind it, without root, using Shizuku.
+*Formerly **HyperNotifyFix**. Same app and package id, so existing installs update in place.*
 
-**Want Gemini, ChatGPT or Claude on the power button instead of Xiao AI?** Pick any installed assistant; HyperNotifyFix sets it up (microphone, background-window permission, power-key action) and keeps it after every reboot, even on HyperOS China ROMs that reset it.
+**Zalo, Messenger, Gmail, Telegram… notifications arriving late or only when you open the app?** HyperOS Toolkit finds and fixes the HyperOS battery/background restrictions behind it, without root, using Shizuku.
+
+**Want Gemini, ChatGPT or Claude on the power button instead of Xiao AI?** Pick any installed assistant; HyperOS Toolkit sets it up (microphone, background-window permission, power-key action) and keeps it after every reboot, even on HyperOS China ROMs that reset it.
 
 **HyperOS toolkit:** remove bloatware and the MSA ad service (reversible, per user), set the default browser or launcher HyperOS keeps locked, one-tap keep-alive presets for messaging, smartwatch and music apps, and a **bank-safe mode** that turns developer options and wireless debugging back off when you are done, so banking apps open normally while every fix stays in place.
 
@@ -10,7 +12,7 @@
 
 [![Download APK](https://img.shields.io/github/v/release/ds-kell/fix-noti-xiaomi?label=Download%20APK&logo=android)](../../releases/latest)
 
-HyperNotifyFix is an open-source, no-root Android diagnostic assistant for delayed notifications on Xiaomi 15 Ultra/HyperOS. It uses a user-started [Shizuku](https://shizuku.rikka.app/) instance to inspect and, after backup/preview/confirmation, apply a small set of reversible Android changes.
+HyperOS Toolkit (formerly HyperNotifyFix) is an open-source, no-root Android diagnostic assistant for delayed notifications on Xiaomi 15 Ultra/HyperOS. It uses a user-started [Shizuku](https://shizuku.rikka.app/) instance to inspect and, after backup/preview/confirmation, apply a small set of reversible Android changes.
 
 It cannot guarantee instant notifications. Delivery also depends on the sender's server, FCM priority, network, application design, notification settings, Android, and undocumented ROM behavior.
 
@@ -18,7 +20,7 @@ It cannot guarantee instant notifications. Delivery also depends on the sender's
 
 ## Install
 
-Download `HyperNotifyFix-<version>.apk` from [Releases](../../releases/latest), install it, then follow **Use** below.
+Download `HyperOS-Toolkit-<version>.apk` from [Releases](../../releases/latest), install it, then follow **Use** below.
 
 ## Requirements and build
 
@@ -35,7 +37,7 @@ Signing: every build (debug and release, app and MILLET helper), local or CI, us
 
 ## Use
 
-1. Install Shizuku, enable Developer options and Wireless debugging, pair/start Shizuku, then grant HyperNotifyFix permission.
+1. Install Shizuku, enable Developer options and Wireless debugging, pair/start Shizuku, then grant HyperOS Toolkit permission.
 2. Select individual apps. Suggested Google packages appear only when installed and are never selected automatically.
 3. Run diagnostics and review every planned change. Dry Run is on by default.
 4. Turn Dry Run off only after reviewing backup/rollback and battery impact. Confirm apply, then inspect every verification result.
@@ -81,4 +83,4 @@ Free and open source. If it saved you time, you can buy me a coffee — thank yo
 
 ## License and disclaimer
 
-Apache-2.0. HyperNotifyFix is not affiliated with Xiaomi, Google, or Shizuku. Shizuku API is Apache-2.0 compatible; see dependency notices for upstream terms.
+Apache-2.0. HyperOS Toolkit is not affiliated with Xiaomi, Google, or Shizuku. Shizuku API is Apache-2.0 compatible; see dependency notices for upstream terms.
