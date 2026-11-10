@@ -1,8 +1,10 @@
-# HyperNotifyFix — fix delayed notifications on Xiaomi HyperOS / MIUI (no root)
+# HyperNotifyFix — fix delayed notifications & pick your AI assistant on Xiaomi HyperOS (no root)
 
 **Zalo, Messenger, Gmail, Telegram… notifications arriving late or only when you open the app?** HyperNotifyFix finds and fixes the HyperOS battery/background restrictions behind it, without root, using Shizuku.
 
-> 🇻🇳 Thông báo Zalo, Messenger, Gmail… đến trễ hoặc chỉ hiện khi mở app trên Xiaomi/Redmi/POCO (HyperOS, MIUI)? App này kiểm tra và sửa các giới hạn chạy nền của HyperOS, không cần root.
+**Want Gemini, ChatGPT or Claude on the power button instead of Xiao AI?** Pick any installed assistant; HyperNotifyFix sets it up (microphone, background-window permission, power-key action) and keeps it after every reboot, even on HyperOS China ROMs that reset it.
+
+> 🇻🇳 Thông báo Zalo, Messenger, Gmail… đến trễ hoặc chỉ hiện khi mở app trên Xiaomi/Redmi/POCO (HyperOS, MIUI)? App này kiểm tra và sửa các giới hạn chạy nền của HyperOS, không cần root. Ngoài ra còn đổi trợ lý AI khi giữ nút nguồn từ Xiao AI sang Gemini, ChatGPT, Claude… và tự giữ sau mỗi lần khởi động lại.
 
 [![Download APK](https://img.shields.io/github/v/release/ds-kell/fix-noti-xiaomi?label=Download%20APK&logo=android)](../../releases/latest)
 
